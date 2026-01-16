@@ -9,8 +9,8 @@ number:
 date:
 consensus: true
 v: 3
-area: "Security"
-workgroup: "SAAG"
+# area: "Security"
+# workgroup: "SAAG"
 keyword:
  - cryptography
  - auditing
@@ -18,12 +18,12 @@ keyword:
  - logging
  - USDT
 venue:
-  group: SAAG
-  type: Working Group
-  mail: saag@ietf.org
-  arch: https://mailarchive.ietf.org/arch/browse/saag/
-  github: ueno/draft-ueno-crypto-auditing
-  latest: https://example.com/LATEST
+#  group: SAAG
+#  type: Working Group
+#  mail: saag@ietf.org
+#  arch: https://mailarchive.ietf.org/arch/browse/saag/
+  github: "ueno/draft-ueno-crypto-auditing"
+  latest: "https://ueno.github.io/draft-ueno-crypto-auditing/draft-ueno-crypto-auditing.html"
 
 author:
  -
