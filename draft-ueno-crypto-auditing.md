@@ -536,6 +536,7 @@ The context-based event organization was inspired by distributed tracing systems
 {:numbered="false"}
 
 ## Complete TLS 1.3 Handshake Example
+{:numbered="false"}
 
 The following shows a complete event log for a TLS 1.3 client handshake with ECDHE key exchange and RSA-PSS signature verification:
 
