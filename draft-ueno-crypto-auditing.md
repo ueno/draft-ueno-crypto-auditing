@@ -194,7 +194,7 @@ Contexts are identified by unique 16-byte values included in all events. This al
 
 The following JSON representation illustrates the conceptual structure of events for a TLS client handshake that includes digital signature verification (actual logs use a binary CBOR format):
 
-~~~json
+~~~
 [
     {
         "type": "new_context",
@@ -260,7 +260,7 @@ Agents MAY periodically rotate the encryption key.
 
 When multiple events are emitted within a single context in a short time window, the same context ID would be written repeatedly. To reduce storage overhead, implementations MAY compress subsequent events sharing the same context ID:
 
-~~~json
+~~~
 [
     {
         "context": "00..01",
@@ -539,7 +539,7 @@ The context-based event organization was inspired by distributed tracing systems
 
 The following shows a complete event log for a TLS 1.3 client handshake with ECDHE key exchange and RSA-PSS signature verification:
 
-~~~json
+~~~
 [
     {
         "context": "a1b2c3d4e5f6...",
