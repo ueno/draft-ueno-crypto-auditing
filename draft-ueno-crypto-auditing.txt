@@ -1,0 +1,966 @@
+
+
+
+
+SAAG                                                             D. Ueno
+Internet-Draft                                             Red Hat, Inc.
+Intended status: Informational                           16 January 2026
+Expires: 20 July 2026
+
+
+             Cryptographic Auditing Event Format and Probes
+                   draft-ueno-crypto-auditing-latest
+
+Abstract
+
+   This document specifies an event logging format and probe interface
+   for auditing cryptographic operations performed by applications and
+   libraries.  The format is designed to capture events at multiple
+   abstraction levels, from low-level cryptographic primitives to high-
+   level protocol operations such as TLS handshakes.  The specification
+   includes USDT (user statically defined tracepoints) probe definitions
+   for instrumentation, a CBOR-based logging format for efficient
+   storage, and a registry of event keys for common cryptographic
+   protocols including TLS and SSH.
+
+About This Document
+
+   This note is to be removed before publishing as an RFC.
+
+   The latest revision of this draft can be found at
+   https://example.com/LATEST.  Status information for this document may
+   be found at https://datatracker.ietf.org/doc/draft-ueno-crypto-
+   auditing/.
+
+   Discussion of this document takes place on the SAAG Working Group
+   mailing list (mailto:saag@ietf.org), which is archived at
+   https://mailarchive.ietf.org/arch/browse/saag/.  Subscribe at
+   https://www.ietf.org/mailman/listinfo/saag/.
+
+   Source for this draft and an issue tracker can be found at
+   https://github.com/ueno/draft-ueno-crypto-auditing.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 20 July 2026.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.  Code Components
+   extracted from this document must include Revised BSD License text as
+   described in Section 4.e of the Trust Legal Provisions and are
+   provided without warranty as described in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction
+     1.1.  Use Cases
+       1.1.1.  Aggregated Statistics on TLS Cipher Suites
+       1.1.2.  Identifying Specific Uses of Weak Algorithms
+       1.1.3.  Compliance Monitoring
+   2.  Conventions and Definitions
+   3.  USDT Probe Interface
+     3.1.  Probe Definitions
+     3.2.  Example Usage
+     3.3.  Protocol Semantics
+     3.4.  Design Rationale
+       3.4.1.  Stability
+       3.4.2.  Performance Considerations
+   4.  Event Logging Format
+     4.1.  Overview
+     4.2.  Conceptual Model
+     4.3.  Context ID Construction
+     4.4.  Event Sequence Compression
+     4.5.  CBOR Encoding
+   5.  Event Key Registry
+     5.1.  Key Naming Convention
+     5.2.  Generic Keys
+     5.3.  TLS Context Names
+     5.4.  TLS Event Keys
+     5.5.  SSH Context Names
+     5.6.  SSH Event Keys
+       5.6.1.  Example SSH Context Tree
+     5.7.  Generic Public Key Cryptography Context Names
+     5.8.  Generic Public Key Cryptography Event Keys
+   6.  Security Considerations
+     6.1.  Privacy Protection
+     6.2.  Context ID Security
+     6.3.  Trust Model
+     6.4.  Denial of Service
+   7.  IANA Considerations
+     7.1.  Event Key Registry
+     7.2.  CBOR Tags
+   8.  References
+     8.1.  Normative References
+     8.2.  Informative References
+   Acknowledgments
+   Examples
+     Complete TLS 1.3 Handshake Example
+   Author's Address
+
+1.  Introduction
+
+   As security research advances, cryptographic algorithms and protocols
+   that were once considered secure may become vulnerable to new
+   attacks.  System and organizational administrators need mechanisms to
+   audit the actual usage of cryptographic operations to ensure
+   compliance with security policies and to identify uses of deprecated
+   or weak algorithms.
+
+   While operating systems may provide system-wide mechanisms to enforce
+   cryptographic policies (such as [CRYPTO-POLICIES]), administrators
+   may relax these policies to support legacy applications.
+   Additionally, applications can bypass system policies or use
+   cryptography in ways not covered by policy enforcement mechanisms.
+
+   This document specifies:
+
+   1.  A USDT-based probe interface for instrumenting cryptographic
+       libraries
+
+   2.  An event logging format based on hierarchical contexts
+
+   3.  A CBOR encoding for efficient storage and transmission
+
+   4.  A registry of event keys for common cryptographic operations
+
+   The design goals include:
+
+   *  *Multi-level abstraction*: Capture both high-level events (e.g.,
+      TLS handshake) and low-level primitives (e.g., signature
+      verification)
+
+   *  *Contextual organization*: Group related events hierarchically
+
+   *  *Performance*: Minimize overhead in monitored applications
+
+   *  *Privacy*: Avoid capturing sensitive cryptographic material
+
+   *  *Stability*: Provide a stable interface that libraries can
+      implement without frequent changes
+
+1.1.  Use Cases
+
+1.1.1.  Aggregated Statistics on TLS Cipher Suites
+
+   Distribution maintainers and standards bodies need data on actual
+   cryptographic algorithm usage to make informed decisions about
+   deprecating weak algorithms.  Anonymized, aggregated statistics on
+   TLS versions, cipher suites, key sizes, and other handshake
+   parameters help assess the impact of tightening security defaults.
+
+1.1.2.  Identifying Specific Uses of Weak Algorithms
+
+   Security researchers periodically discover new attacks on
+   cryptographic algorithms.  For example, chosen-prefix collision
+   attacks on SHA-1 make it unsuitable for digital signatures.  However,
+   completely disabling SHA-1 is impractical since it is widely used for
+   non-cryptographic purposes (e.g., as a fingerprint for TLS
+   certificates).
+
+   Administrators need to identify which processes use weak algorithms
+   in security-critical contexts (such as signature verification) so
+   they can migrate to stronger alternatives and verify that migration
+   is complete.
+
+1.1.3.  Compliance Monitoring
+
+   Organizations may be required by law or standards to ensure their
+   systems use only approved cryptographic algorithms.  Runtime
+   monitoring allows administrators to identify processes that use non-
+   compliant algorithms, potentially in violation of configured
+   policies.
+
+2.  Conventions and Definitions
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+3.  USDT Probe Interface
+
+   Programs being traced (typically cryptographic libraries) define USDT
+   (user statically defined tracepoints) probes to notify monitoring
+   agents of cryptographic events.  This section specifies the probe
+   interface.
+
+3.1.  Probe Definitions
+
+   Libraries define four types of probes using the following macros:
+
+   /* Introduce a new context CONTEXT, derived from PARENT */
+   #define CRYPTO_AUDITING_NEW_CONTEXT(context, parent) \
+       DTRACE_PROBE2(crypto_auditing, new_context, context, parent)
+
+   /* Assert an event with KEY and VALUE. The key is treated as a
+    * NUL-terminated string, while the value is in the size of
+    * machine word
+    */
+   #define CRYPTO_AUDITING_WORD_DATA(context, key_ptr, value_ptr) \
+       DTRACE_PROBE3(crypto_auditing, word_data, context, \
+                     key_ptr, value_ptr)
+
+   /* Assert an event with KEY and VALUE. Both the key and value are
+    * treated as a NUL-terminated string
+    */
+   #define CRYPTO_AUDITING_STRING_DATA(context, key_ptr, value_ptr) \
+       DTRACE_PROBE3(crypto_auditing, string_data, context, \
+                     key_ptr, value_ptr)
+
+   /* Assert an event with KEY and VALUE. The key is treated as a
+    * NUL-terminated string, while the value is explicitly sized
+    * with VALUE_SIZE
+    */
+   #define CRYPTO_AUDITING_BLOB_DATA(context, key_ptr, \
+                                      value_ptr, value_size) \
+       DTRACE_PROBE4(crypto_auditing, blob_data, context, \
+                     key_ptr, value_ptr, value_size)
+
+   The context parameter can be any object with the size of a machine
+   word (a pointer or long, i.e., a 64-bit integer on 64-bit systems).
+
+3.2.  Example Usage
+
+   The following example demonstrates how a TLS library might instrument
+   a client handshake:
+
+   /* Start TLS client handshake */
+   CRYPTO_AUDITING_NEW_CONTEXT(context, NULL);
+
+   /* Indicate that this context is about TLS client handshake */
+   CRYPTO_AUDITING_STRING_DATA(context, "name",
+                                "tls::handshake_client");
+
+   /* Indicate that TLS 1.3 is selected */
+   CRYPTO_AUDITING_WORD_DATA(context, "tls::protocol_version", 0x0304);
+
+3.3.  Protocol Semantics
+
+   The four probe types have the following semantics:
+
+   *  new_context(context, parent): Introduce a new context under a
+      given parent.  If parent is NULL or 0, the context has no parent.
+
+   *  word_data(context, key, value): Emit an event with a machine-word-
+      sized value
+
+   *  string_data(context, key, value): Emit an event with a NUL-
+      terminated string value
+
+   *  blob_data(context, key, value, value_size): Emit an event with a
+      binary blob of specified size
+
+3.4.  Design Rationale
+
+3.4.1.  Stability
+
+   The probe interface is designed to be stable across library versions.
+   By using generic key-value pairs rather than implementation-specific
+   parameters, libraries can evolve their internal representations
+   without breaking the probe interface.  Only the set of emitted keys
+   and their semantics need to be coordinated, which can be done through
+   the event registry (Section 5).
+
+3.4.2.  Performance Considerations
+
+   String keys provide flexibility but require BPF programs to access
+   userspace memory using bpf_probe_read_user_str.  If this overhead
+   proves excessive in practice, future versions might define integer
+   codepoints for common keys while maintaining backward compatibility
+   through a mapping table.
+
+4.  Event Logging Format
+
+4.1.  Overview
+
+   The logging format is a stream of structured event entries organized
+   hierarchically by context.  Events are classified into two
+   categories:
+
+   *  *Context mapping events*: Establish parent-child relationships
+      between contexts
+
+   *  *Data events*: Represent actual cryptographic events as key-value
+      pairs
+
+   Contexts are identified by unique 16-byte values included in all
+   events.  This allows events from multiple processes or concurrent
+   operations to be interleaved in the log stream while remaining
+   separable for analysis.
+
+4.2.  Conceptual Model
+
+   The following JSON representation illustrates the conceptual
+   structure of events for a TLS client handshake that includes digital
+   signature verification (actual logs use a binary CBOR format):
+
+   [
+       {
+           "type": "new_context",
+           "context": "00..01",
+           "parent": "00..00"
+       },
+       {
+           "type": "string_data",
+           "context": "00..01",
+           "name": "tls::handshake_client"
+       },
+       {
+           "type": "word_data",
+           "context": "00..01",
+           "tls::protocol_version": 0x0304
+       },
+       {
+           "type": "new_context",
+           "context": "00..02",
+           "parent": "00..01"
+       },
+       {
+           "type": "string_data",
+           "context": "00..02",
+           "name": "tls::certificate_verify"
+       },
+       {
+           "type": "word_data",
+           "context": "00..02",
+           "tls::signature_algorithm": 0x0804
+       },
+       {
+           "type": "word_data",
+           "context": "00..02",
+           "pk::bits": 3072
+       }
+   ]
+
+   This can be conceptually represented as a tree:
+
+   *  tls::handshake_client (00..01)
+
+      -  tls::protocol_version = 0x0304
+
+      -  tls::certificate_verify (00..02)
+
+         o  tls::signature_algorithm = 0x0804
+
+         o  pk::bits = 3072
+
+4.3.  Context ID Construction
+
+   For security and privacy reasons, context IDs MUST be constructed to
+   be indistinguishable from the internal state of target programs
+   (e.g., PID or memory address), even though such information MAY be
+   used as input to the construction algorithm.
+
+   The RECOMMENDED construction algorithm is:
+
+   1.  The monitoring agent initializes an AES encryption key at startup
+
+   2.  An 8-byte context identifier and an 8-byte PID/TGID of the target
+       program are concatenated to form a 16-byte input (one AES block)
+
+   3.  The 16-byte input is encrypted using AES-ECB with the key from
+       step 1
+
+   This approach is inspired by record number encryption in QUIC and
+   DTLS 1.3 [RFC9147].  With AES-NI instruction support, this procedure
+   requires approximately 15 CPU cycles.
+
+   Agents MAY periodically rotate the encryption key.
+
+4.4.  Event Sequence Compression
+
+   When multiple events are emitted within a single context in a short
+   time window, the same context ID would be written repeatedly.  To
+   reduce storage overhead, implementations MAY compress subsequent
+   events sharing the same context ID:
+
+   [
+       {
+           "context": "00..01",
+           "events": [
+               {
+                   "type": "new_context",
+                   "parent": "00..00"
+               },
+               {
+                   "type": "string_data",
+                   "name": "tls::handshake_client"
+               },
+               {
+                   "type": "word_data",
+                   "tls::protocol_version": 0x0304
+               }
+           ]
+       },
+       {
+           "context": "00..02",
+           "events": [
+               {
+                   "type": "new_context",
+                   "parent": "00..01"
+               },
+               {
+                   "type": "string_data",
+                   "name": "tls::certificate_verify"
+               },
+               {
+                   "type": "word_data",
+                   "tls::signature_algorithm": 0x0804
+               },
+               {
+                   "type": "word_data",
+                   "pk::bits": 3072
+               }
+           ]
+       }
+   ]
+
+   This compression preserves the same semantics as the uncompressed
+   form.
+
+4.5.  CBOR Encoding
+
+   The RECOMMENDED storage format uses CBOR [RFC7049] (Concise Binary
+   Object Representation).  The following CDDL [RFC8610] (Concise Data
+   Definition Language) specification defines the format:
+
+   LogEntry = EventGroup
+
+   EventGroup = {
+     context: ContextID
+     start: time
+     end: time
+     events: [+ Event]
+   }
+
+   Event = NewContext / Data
+
+   ContextID = bstr .size 16
+
+   NewContext = {
+     NewContext: {
+       parent: ContextID
+     }
+   }
+
+   Data = {
+     Data: {
+       key: tstr
+       value: uint .size 8 / tstr / bstr
+     }
+   }
+
+   The log consists of a series of EventGroup objects.  Each group
+   contains events that occurred within a time window from start to end.
+   Timestamps are represented as monotonic durations from the kernel
+   boot time.  ContextID is the encrypted 16-byte context identifier.
+
+5.  Event Key Registry
+
+5.1.  Key Naming Convention
+
+   Event keys follow one of two patterns:
+
+   *  *Generic keys*: Consist of alphanumeric characters and underscores
+
+   *  *Scoped keys*: Have a namespace prefix ending with "::"
+
+   In ABNF notation:
+
+   name = ALPHA *(ALPHA / DIGIT / "_")
+   generic_key = name
+   scoped_key = name "::" name
+
+   Keys also determine value types.  For example, name takes a string
+   value, while tls::protocol_version takes a 16-bit unsigned integer.
+
+5.2.  Generic Keys
+
+            +======+============+============================+
+            | Key  | Value Type | Description                |
+            +======+============+============================+
+            | name | string     | The name of the current    |
+            |      |            | context (from table below) |
+            +------+------------+----------------------------+
+
+                                 Table 1
+
+5.3.  TLS Context Names
+
+      +=========================+==================================+
+      | Name                    | Description                      |
+      +=========================+==================================+
+      | tls::handshake_client   | TLS handshake for client         |
+      +-------------------------+----------------------------------+
+      | tls::handshake_server   | TLS handshake for server         |
+      +-------------------------+----------------------------------+
+      | tls::certificate_sign   | Digital signature created using  |
+      |                         | certificate in TLS handshake     |
+      +-------------------------+----------------------------------+
+      | tls::certificate_verify | Digital signature verified using |
+      |                         | certificate in TLS handshake     |
+      +-------------------------+----------------------------------+
+      | tls::key_exchange       | Shared secret derivation in TLS  |
+      |                         | handshake                        |
+      +-------------------------+----------------------------------+
+
+                                 Table 2
+
+5.4.  TLS Event Keys
+
+   +==================================+======+=========================+
+   | Key                              |Value | Description             |
+   |                                  |Type  |                         |
+   +==================================+======+=========================+
+   | tls::protocol_version            |uint16| Negotiated TLS version  |
+   +----------------------------------+------+-------------------------+
+   | tls::ciphersuite                 |uint16| Negotiated ciphersuite  |
+   |                                  |      | (IANA TLS Cipher Suite  |
+   |                                  |      | registry)               |
+   +----------------------------------+------+-------------------------+
+   | tls::signature_algorithm         |uint16| Signature algorithm     |
+   |                                  |      | used (IANA TLS          |
+   |                                  |      | SignatureScheme         |
+   |                                  |      | registry)               |
+   +----------------------------------+------+-------------------------+
+   | tls::key_exchange_algorithm      |uint16| Key exchange mode:      |
+   |                                  |      | ECDHE(0), DHE(1),       |
+   |                                  |      | PSK(2), ECDHE-PSK(3),   |
+   |                                  |      | DHE-PSK(4)              |
+   +----------------------------------+------+-------------------------+
+   | tls::group                       |uint16| Groups used in          |
+   |                                  |      | handshake (IANA TLS     |
+   |                                  |      | Supported Groups        |
+   |                                  |      | registry)               |
+   +----------------------------------+------+-------------------------+
+   | tls::ext::extended_master_secret |uint16| Present when            |
+   |                                  |      | extended_master_secret  |
+   |                                  |      | extension is            |
+   |                                  |      | negotiated (value       |
+   |                                  |      | ignored)                |
+   +----------------------------------+------+-------------------------+
+
+                                  Table 3
+
+5.5.  SSH Context Names
+
+     +=======================+=======================================+
+     | Name                  | Description                           |
+     +=======================+=======================================+
+     | ssh::handshake_client | SSH handshake for client              |
+     +-----------------------+---------------------------------------+
+     | ssh::handshake_server | SSH handshake for server              |
+     +-----------------------+---------------------------------------+
+     | ssh::client_key       | SSH client key signature/verification |
+     +-----------------------+---------------------------------------+
+     | ssh::server_key       | SSH server key signature/verification |
+     +-----------------------+---------------------------------------+
+     | ssh::key_exchange     | SSH key exchange                      |
+     +-----------------------+---------------------------------------+
+
+                                  Table 4
+
+5.6.  SSH Event Keys
+
+   All keys except ssh::rsa_bits have string type.  Server and client
+   values are distinguished by context.
+
+   +=============================+======+==============+======================+
+   |Key                          |Value |Description   |Example               |
+   |                             |Type  |              |                      |
+   +=============================+======+==============+======================+
+   |ssh::ident_string            |string|Software      |SSH-2.0-OpenSSH_8.8   |
+   |                             |      |identification|                      |
+   |                             |      |string        |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::peer_ident_string       |string|Peer software |SSH-2.0-OpenSSH_8.8   |
+   |                             |      |identification|                      |
+   |                             |      |string        |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::key_algorithm           |string|Key used in   |ssh-ed25519           |
+   |                             |      |handshake/key |                      |
+   |                             |      |ownership     |                      |
+   |                             |      |proof         |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::rsa_bits                |uint16|Key bits (RSA |2048                  |
+   |                             |      |only)         |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::cert_signature_algorithm|string|If cert is    |ecdsa-sha2-nistp521   |
+   |                             |      |used,         |                      |
+   |                             |      |signature     |                      |
+   |                             |      |algorithm of  |                      |
+   |                             |      |cert          |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::kex_algorithm           |string|Negotiated key|curve25519-sha256     |
+   |                             |      |exchange      |                      |
+   |                             |      |algorithm     |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::kex_group               |string|Group used for|moduli+bits or group  |
+   |                             |      |key exchange  |name                  |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::c2s_cipher              |string|Client-to-    |aes256-gcm@openssh.com|
+   |                             |      |server cipher |                      |
+   |                             |      |algorithm     |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::s2c_cipher              |string|Server-to-    |aes256-gcm@openssh.com|
+   |                             |      |client cipher |                      |
+   |                             |      |algorithm     |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::c2s_mac                 |string|Client-to-    |umac-                 |
+   |                             |      |server MAC    |128-etm@openssh.com   |
+   |                             |      |(omitted for  |                      |
+   |                             |      |implicit)     |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::s2c_mac                 |string|Server-to-    |umac-                 |
+   |                             |      |client MAC    |128-etm@openssh.com   |
+   |                             |      |(omitted for  |                      |
+   |                             |      |implicit)     |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::c2s_compression         |string|Client-to-    |zlib@openssh.com      |
+   |                             |      |server        |                      |
+   |                             |      |compression   |                      |
+   |                             |      |(omitted for  |                      |
+   |                             |      |none)         |                      |
+   +-----------------------------+------+--------------+----------------------+
+   |ssh::s2c_compression         |string|Server-to-    |zlib@openssh.com      |
+   |                             |      |client        |                      |
+   |                             |      |compression   |                      |
+   |                             |      |(omitted for  |                      |
+   |                             |      |none)         |                      |
+   +-----------------------------+------+--------------+----------------------+
+
+                                  Table 5
+
+5.6.1.  Example SSH Context Tree
+
+   - ssh::handshake_client
+     - ssh::ident_string = SSH-2.0-OpenSSH_8.8
+     - ssh::peer_ident_string = SSH-2.0-OpenSSH_8.8
+     - ssh::key_exchange
+       - ssh::kex_algorithm = curve25519-sha256
+       - ssh::key_algorithm = ssh-ed25519
+       - ssh::s2c_cipher = aes256-gcm@openssh.com
+       - ssh::c2s_cipher = aes256-gcm@openssh.com
+     - ssh::server_key
+       - ssh::key_algorithm = ssh-ed25519
+     - ssh::client_key
+       - ssh::key_algorithm = ssh-ed25519
+
+5.7.  Generic Public Key Cryptography Context Names
+
+   These contexts are used when a public key operation cannot be
+   determined from the outer context.  If the operation is obvious from
+   the parent context (e.g., tls::certificate_verify implies
+   verification), implementations MAY omit creating a new context.
+
+             +=================+============================+
+             | Name            | Description                |
+             +=================+============================+
+             | pk::sign        | Digital signature created  |
+             +-----------------+----------------------------+
+             | pk::verify      | Digital signature verified |
+             +-----------------+----------------------------+
+             | pk::encrypt     | Encryption performed       |
+             +-----------------+----------------------------+
+             | pk::decrypt     | Decryption performed       |
+             +-----------------+----------------------------+
+             | pk::encapsulate | Session key encapsulated   |
+             +-----------------+----------------------------+
+             | pk::decapsulate | Session key decapsulated   |
+             +-----------------+----------------------------+
+             | pk::generate    | Private key generated      |
+             +-----------------+----------------------------+
+             | pk::derive      | Shared secret derived      |
+             +-----------------+----------------------------+
+
+                                 Table 6
+
+5.8.  Generic Public Key Cryptography Event Keys
+
+   These keys can be attached to any context.  They are useful when
+   algorithm parameters cannot be determined from the outer context.  If
+   parameters are obvious from the parent context (e.g.,
+   tls::signature_algorithm is present), implementations MAY omit these
+   events.
+
+   All keys except pk::bits and pk::static have string type.  String
+   values can be arbitrary; it is the responsibility of data consumers
+   to correlate them.
+
+        +===============+========+================================+
+        | Key           | Value  | Description                    |
+        |               | Type   |                                |
+        +===============+========+================================+
+        | pk::algorithm | string | Algorithm name                 |
+        +---------------+--------+--------------------------------+
+        | pk::curve     | string | Elliptic curve name            |
+        +---------------+--------+--------------------------------+
+        | pk::group     | string | FFDH group name                |
+        +---------------+--------+--------------------------------+
+        | pk::bits      | uint16 | Key strength in bits           |
+        +---------------+--------+--------------------------------+
+        | pk::hash      | string | Hash algorithm (for prehashed/ |
+        |               |        | parametrized schemes: ECDSA,   |
+        |               |        | RSA-PSS, RSA-OAEP)             |
+        +---------------+--------+--------------------------------+
+        | pk::static    | uint16 | Present when pk::derive uses   |
+        |               |        | reused keys (value ignored)    |
+        +---------------+--------+--------------------------------+
+
+                                  Table 7
+
+6.  Security Considerations
+
+6.1.  Privacy Protection
+
+   The logging format is designed to avoid capturing sensitive
+   cryptographic material such as private keys, session keys, or
+   plaintext data.  Only algorithm identifiers, key sizes, and protocol
+   parameters are logged.
+
+   However, implementations MUST ensure that:
+
+   1.  Context IDs cannot be correlated with internal program state
+       (PIDs, memory addresses) by external observers
+
+   2.  Timestamps and event sequences do not leak sensitive information
+       about user behavior
+
+   3.  Aggregated statistics are properly anonymized before collection
+
+6.2.  Context ID Security
+
+   The AES-ECB encryption of context IDs prevents external observers
+   from:
+
+   *  Determining the PID or TGID of monitored processes
+
+   *  Correlating events across different monitoring sessions (if keys
+      are rotated)
+
+   *  Predicting future context IDs
+
+   Agents SHOULD rotate encryption keys periodically and SHOULD use
+   cryptographically secure random number generators to create initial
+   keys.
+
+6.3.  Trust Model
+
+   The architecture assumes that monitored libraries and the monitoring
+   agent are trustworthy.  Malicious libraries could:
+
+   *  Emit false events
+
+   *  Omit security-relevant events
+
+   *  Emit events designed to fingerprint or track users
+
+   Deployments requiring strong integrity guarantees SHOULD use
+   additional mechanisms such as:
+
+   *  SELinux or AppArmor policies restricting which processes can emit
+      events
+
+   *  Integrity measurement architecture (IMA) to verify monitored
+      binaries
+
+   *  Cryptographic signatures on log files
+
+6.4.  Denial of Service
+
+   Malicious applications could attempt to overwhelm the monitoring
+   agent by generating excessive probe events.  Implementations SHOULD
+   implement rate limiting and resource quotas to prevent denial of
+   service.
+
+7.  IANA Considerations
+
+7.1.  Event Key Registry
+
+   IANA is requested to create a new registry titled "Cryptographic
+   Auditing Event Keys" under a new "Cryptographic Auditing" category.
+
+   The registry should track:
+
+   *  Key name (e.g., tls::protocol_version)
+
+   *  Value type (uint16, uint32, string, bstr)
+
+   *  Description
+
+   *  Reference
+
+   Initial entries are defined in Section 5.
+
+   Registration policy: Specification Required (RFC 8126)
+
+7.2.  CBOR Tags
+
+   This document does not define new CBOR tags.  Future extensions MAY
+   request CBOR tag allocations if specialized encoding is needed for
+   specific event types.
+
+8.  References
+
+8.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+   [RFC7049]  Bormann, C. and P. Hoffman, "Concise Binary Object
+              Representation (CBOR)", RFC 7049, DOI 10.17487/RFC7049,
+              October 2013, <https://www.rfc-editor.org/rfc/rfc7049>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+   [RFC8446]  Rescorla, E., "The Transport Layer Security (TLS) Protocol
+              Version 1.3", RFC 8446, DOI 10.17487/RFC8446, August 2018,
+              <https://www.rfc-editor.org/rfc/rfc8446>.
+
+   [RFC8610]  Birkholz, H., Vigano, C., and C. Bormann, "Concise Data
+              Definition Language (CDDL): A Notational Convention to
+              Express Concise Binary Object Representation (CBOR) and
+              JSON Data Structures", RFC 8610, DOI 10.17487/RFC8610,
+              June 2019, <https://www.rfc-editor.org/rfc/rfc8610>.
+
+8.2.  Informative References
+
+   [CRYPTO-POLICIES]
+              "Fedora Crypto Policies", 2024, <https://gitlab.com/
+              redhat-crypto/fedora-crypto-policies/>.
+
+   [FIPS186-4]
+              "Digital Signature Standard (DSS)", July 2013,
+              <https://csrc.nist.gov/publications/detail/fips/186/4/
+              final>.
+
+   [RFC9147]  Rescorla, E., Tschofenig, H., and N. Modadugu, "The
+              Datagram Transport Layer Security (DTLS) Protocol Version
+              1.3", RFC 9147, DOI 10.17487/RFC9147, April 2022,
+              <https://www.rfc-editor.org/rfc/rfc9147>.
+
+   [SP800-90A]
+              "Recommendation for Random Number Generation Using
+              Deterministic Random Bit Generators", June 2015,
+              <https://csrc.nist.gov/publications/detail/sp/800-90a/rev-
+              1/final>.
+
+   [USDT]     "User-space probes for BPF", March 2018,
+              <https://lwn.net/Articles/753601/>.
+
+Acknowledgments
+
+   The authors would like to thank the cryptographic library maintainers
+   who provided feedback on the probe interface design, including
+   developers from GnuTLS, OpenSSL, and OpenSSH projects.
+
+   The context-based event organization was inspired by distributed
+   tracing systems used in microservices architectures and by the
+   contextual logging proposal (KEP-3077) for Kubernetes.
+
+Examples
+
+Complete TLS 1.3 Handshake Example
+
+   The following shows a complete event log for a TLS 1.3 client
+   handshake with ECDHE key exchange and RSA-PSS signature verification:
+
+   [
+       {
+           "context": "a1b2c3d4e5f6...",
+           "start": 1234567890,
+           "end": 1234567895,
+           "events": [
+               {
+                   "type": "new_context",
+                   "parent": "000000000000..."
+               },
+               {
+                   "type": "string_data",
+                   "name": "tls::handshake_client"
+               },
+               {
+                   "type": "word_data",
+                   "tls::protocol_version": 0x0304
+               },
+               {
+                   "type": "word_data",
+                   "tls::ciphersuite": 0x1301
+               }
+           ]
+       },
+       {
+           "context": "f6e5d4c3b2a1...",
+           "start": 1234567891,
+           "end": 1234567893,
+           "events": [
+               {
+                   "type": "new_context",
+                   "parent": "a1b2c3d4e5f6..."
+               },
+               {
+                   "type": "string_data",
+                   "name": "tls::key_exchange"
+               },
+               {
+                   "type": "word_data",
+                   "tls::group": 0x001d
+               }
+           ]
+       },
+       {
+           "context": "123456789abc...",
+           "start": 1234567892,
+           "end": 1234567894,
+           "events": [
+               {
+                   "type": "new_context",
+                   "parent": "a1b2c3d4e5f6..."
+               },
+               {
+                   "type": "string_data",
+                   "name": "tls::certificate_verify"
+               },
+               {
+                   "type": "word_data",
+                   "tls::signature_algorithm": 0x0804
+               },
+               {
+                   "type": "word_data",
+                   "pk::bits": 3072
+               }
+           ]
+       }
+   ]
+
+Author's Address
+
+   Daiki Ueno
+   Red Hat, Inc.
+   Email: dueno@redhat.com

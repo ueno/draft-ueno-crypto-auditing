@@ -1,0 +1,2541 @@
+<!DOCTYPE html>
+<html lang="en" class="Internet-Draft">
+<head>
+<meta charset="utf-8">
+<meta content="Common,Latin" name="scripts">
+<meta content="initial-scale=1.0" name="viewport">
+<title>Cryptographic Auditing Event Format and Probes</title>
+<meta content="Daiki Ueno" name="author">
+<meta content="
+       This document specifies an event logging format and probe interface for auditing cryptographic operations performed by applications and libraries. The format is designed to capture events at multiple abstraction levels, from low-level cryptographic primitives to high-level protocol operations such as TLS handshakes. The specification includes USDT (user statically defined tracepoints) probe definitions for instrumentation, a CBOR-based logging format for efficient storage, and a registry of event keys for common cryptographic protocols including TLS and SSH. 
+    " name="description">
+<meta content="xml2rfc 3.31.0" name="generator">
+<meta content="cryptography" name="keyword">
+<meta content="auditing" name="keyword">
+<meta content="monitoring" name="keyword">
+<meta content="logging" name="keyword">
+<meta content="USDT" name="keyword">
+<meta content="draft-ueno-crypto-auditing-latest" name="ietf.draft">
+<!-- Generator version information:
+  xml2rfc 3.31.0
+    Python 3.12.12
+    ConfigArgParse 1.7
+    google-i18n-address 3.1.1
+    intervaltree 3.2.1
+    Jinja2 3.1.6
+    lxml 6.0.2
+    platformdirs 4.5.1
+    pycountry 24.6.1
+    PyYAML 6.0.3
+    requests 2.32.5
+    wcwidth 0.2.14
+-->
+<link href="draft-ueno-crypto-auditing.xml" rel="alternate" type="application/rfc+xml">
+<link href="#copyright" rel="license">
+<style type="text/css">@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Lora SemiBold'), local('Lora-SemiBold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-semibold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  color-scheme: light dark;
+  --background-color: #fff;
+  --text-color: #222;
+  --title-color: #191919;
+  --link-color: #2a6496;
+  --highlight-color: #f9f9f9;
+  --line-color: #eee;
+  --pilcrow-weak: #ddd;
+  --pilcrow-strong: #bbb;
+  --small-font-size: 14.5px;
+  --font-mono: 'Oxygen Mono', monospace;
+  --font-title: "Sofia Sans Semi Condensed", sans-serif;
+  scrollbar-color: #bbb #eee;
+}
+body {
+  max-width: 600px;
+  margin: 75px auto;
+  padding: 0 5px;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  font: 16px/22px "Lora", serif;
+  scroll-behavior: smooth;
+}
+
+.ears {
+  display: none;
+}
+
+/* headings */
+section {
+  clear: both;
+}
+.section-number {
+  padding-right: 0.5em;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title);
+  font-weight: 680;
+  margin: 0.8em 0 0.3em;
+  font-size-adjust: 0.5;
+  color: var(--title-color);
+}
+h1#title {
+  font-size: 32px;
+  line-height: 40px;
+  clear: both;
+}
+h1#title, h1#rfcnum {
+  margin: 1.5em 0 0.2em;
+}
+h1#rfcnum + h1#title {
+  margin: 0.2em 0;
+}
+
+h1, h2, h3 {
+  font-size: 22px;
+  line-height: 27px;
+}
+h4, h5, h6 {
+  font-size: 20px;
+  line-height: 24px;
+}
+
+/* general structure */
+.author {
+  padding-bottom: 0.3em;
+  vertical-align: top;
+}
+#abstract+p {
+  font-size: 18px;
+  line-height: 24px;
+}
+#abstract+p code, #abstract+p samp, #abstract+p tt {
+  font-size: 16px;
+  line-height: 0;
+}
+
+p {
+  padding: 0;
+  margin: 0.5em 0;
+  text-align: left;
+}
+div {
+  margin: 0;
+}
+.alignRight.art-text {
+  background-color: var(--highlight-color);
+  border: 1px solid var(--line-color);
+  border-radius: 3px;
+  padding: 0.5em 1em 0;
+  margin-bottom: 0.5em;
+}
+.alignRight.art-text pre {
+  padding: 0;
+  width: auto;
+}
+.alignRight {
+  margin: 1em 0;
+}
+.alignRight > *:first-child {
+  border: none;
+  margin: 0;
+  float: right;
+  clear: both;
+}
+.alignRight > *:nth-child(2) {
+  clear: both;
+  display: block;
+  border: none;
+}
+svg {
+  display: block;
+}
+/* font-family isn't space-separated, but =~ will have to do */
+svg[font-family~="monospace" i], svg [font-family~="monospace" i] {
+  font-family: var(--font-mono);
+}
+.alignCenter.art-text {
+  background-color: var(--highlight-color);
+  border: 1px solid var(--line-color);
+  border-radius: 3px;
+  padding: 0.5em 1em 0;
+  margin-bottom: 0.5em;
+}
+.alignCenter.art-text pre {
+  padding: 0;
+  width: auto;
+}
+.alignCenter {
+  margin: 1em 0;
+}
+.alignCenter > *:first-child {
+  border: none;
+  /* this isn't optimal, but it's an existence proof.  PrinceXML doesn't
+     support flexbox yet.
+  */
+  display: table;
+  margin: 0 auto;
+}
+
+/* lists */
+ol, ul {
+  padding: 0;
+  margin: 0 0 0.5em 2em;
+  & :is(ol, ul) {
+    margin-left: 1em;
+  }
+}
+li {
+  margin: 0 0 0.25em 0;
+}
+ul.empty, .ulEmpty {
+  list-style-type: none;
+  & li {
+    margin-top: 0.5em;
+  }
+}
+:is(ul, ol).compact, .ulCompact, .olCompact {
+  margin: 0 0 0 2em;
+  & li {
+    margin: 0;
+    & :first-child { margin-top: 0; }
+    & :last-child { margin-bottom: 0; }
+  }
+}
+
+/* definition lists */
+dl {
+  clear: left;
+  --indent: 3ch;
+  /* --indent: attr(indent ch); not supported in any browser, but we can dream */
+  &.olPercent {
+    --indent: 5ch;
+    & > dt {
+      min-width: calc(var(--indent) - 2ch);
+    }
+  }
+  &.olPercent > dt {
+    float: none;
+  }
+
+  dl > dd > & {
+    margin-top: 0.5em;
+    margin-bottom: 0;
+  }
+}
+dl:not(.dlNewline) > dt {
+  float: left;
+  margin-right: 2ch;
+  min-width: 8ch;
+}
+dl > dd {
+  margin-bottom: .8em;
+  margin-left: var(--indent) !important; /* stupid element overrides */
+  min-height: 2ex;
+}
+:is(dl.compact, .dlCompact) > dd {
+  margin-bottom: 0;
+  & > :is(:first-child, .break:first-child + *) {
+    margin-top: 0;
+  }
+  & > :is(:last-child) {
+    margin-bottom: 0;
+  }
+}
+:is(dd, span).break {
+  display: none;
+}
+
+/* links */
+a, a[href].selfRef:hover {
+  text-decoration: none;
+}
+a[href] {
+  color: var(--link-color);
+}
+a[href].selfRef, .iref + a[href].internal {
+  color: var(--text-color);
+}
+a[href]:hover {
+  text-decoration: underline;
+}
+a[href].selfRef:hover {
+  background-color: var(--highlight-color);
+}
+a.xref:is(.cite, .auto), :is(#status-of-memo, #copyright) a {
+  white-space: nowrap;
+}
+
+/* Figures */
+tt, code, pre {
+  background-color: var(--highlight-color);
+  font: 14px/22px var(--font-mono);
+}
+tt, code {
+  /* changing the font for inline elements leads to different ascender
+     and descender heights; as we want to retain baseline alignment,
+     remove leading to avoid altering the final height of lines
+     note: this fails if these blocks take an entire line,
+     a different solution would be great */
+  line-height: 0;
+}
+:is(h1, h2, h3, h4, h5, h6) :is(tt, code) {
+  font-size: 84%;
+}
+pre {
+  border: 1px solid var(--line-color);
+  font-size: 13.5px;
+  line-height: 16px;
+  letter-spacing: -0.2px;
+  margin: 5px;
+  padding: 5px;
+}
+img {
+  max-width: 100%;
+}
+figure {
+  margin: 0.5em 0;
+  padding: 0;
+}
+figure blockquote {
+  margin: 0.8em 0.4em 0.4em;
+}
+figcaption, caption {
+  font-style: italic;
+  margin: 0.5em 1.5em;
+  text-align: left;
+  caption-side: bottom;
+}
+@media screen {
+  /* Auto-collapse boilerplate. */
+  :is(#status-of-memo, #copyright) p {
+    margin: -2px 0;
+    max-height: 0;
+    transition: max-height 2s ease, margin 0.5s ease 0.5s;
+    overflow: hidden;
+  }
+  :is(#status-of-memo, #copyright):hover p,
+  :is(#status-of-memo, #copyright) h2:target ~ p {
+    margin: 0.5em 0;
+    max-height: 500px;
+    overflow: auto;
+  }
+  pre, svg {
+    display: inline-block;
+    /* In the horizontal direction, sometimes people make over-sized figures.
+       Scrollbars for those is therefore necessary: auto adds them as necessary..
+       In the vertical direction, the line-height can combine with the font
+       asender/descender height to produce scrollbars: hidden avoids that. */
+    overflow: auto hidden;
+  }
+  pre {
+    max-width: 100%;
+    width: calc(100% - 22px - 1em);
+  }
+  svg {
+    max-width: calc(100% - 22px - 1em);
+  }
+  figure pre {
+    display: block;
+    width: calc(100% - 25px);
+  }
+  :is(pre, svg) + .pilcrow {
+    display: inline-block;
+    vertical-align: text-bottom;
+    padding-bottom: 8px;
+  }
+}
+
+/* aside, blockquote */
+aside, blockquote {
+  margin-left: 0;
+  padding: 0 2em;
+  font-style: italic;
+}
+blockquote {
+  margin: 1em 0;
+}
+cite {
+  display: block;
+  text-align: right;
+  font-style: italic;
+}
+
+/* tables */
+table {
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+}
+table.right {
+  margin-left: auto;
+}
+table.center {
+  margin-left: auto;
+  margin-right: auto;
+}
+table.left {
+  margin-right: auto;
+}
+table .text-left {
+  text-align: left;
+}
+table .text-center {
+  text-align: center;
+}
+table .text-right {
+  text-align: right;
+}
+
+thead, tbody {
+  border: 1px solid var(--line-color);
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 10px;
+}
+th {
+  background-color: var(--line-color);
+}
+:is(tr:nth-child(2n), thead+tbody > tr:nth-child(2n+1)) > td {
+  background-color: var(--background-color);
+}
+:is(tr:nth-child(2n+1), thead+tbody > tr:nth-child(2n)) > td {
+  background-color: var(--highlight-color);
+}
+table caption {
+  margin: 0;
+  padding: 3px 0 3px 1em;
+}
+table p {
+  margin: 0;
+}
+
+/* pilcrow */
+a.pilcrow {
+  margin-left: 3px;
+  opacity: 0.2;
+  user-select: none;
+  &[href] {
+    color: var(--pilcrow-weak);
+    &:hover { text-decoration: none; }
+  }
+}
+@media not print {
+  :hover > a.pilcrow {
+    opacity: 1;
+  }
+  a.pilcrow[href]:hover {
+    color: var(--pilcrow-strong);
+    background-color: transparent;
+  }
+}
+@media print {
+  a.pilcrow {
+    display: none;
+  }
+}
+
+/* misc */
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-color);
+}
+.bcp14 {
+  font-variant: small-caps;
+  font-weight: 600;
+  font-size: var(--small-font-size);
+}
+.role {
+  font-variant: all-small-caps;
+}
+sub, sup {
+  line-height: 1;
+  font-size: 80%;
+}
+
+/* info block */
+#identifiers {
+  margin: 0;
+  font-size: var(--small-font-size);
+  line-height: 18px;
+  --identifier-width: 15ch;
+  & dt {
+    width: var(--identifier-width);
+    min-width: var(--identifier-width);
+    clear: left;
+    float: left;
+    text-align: right;
+    margin-right: 1ch;
+  }
+  & dd {
+    margin: 0;
+    margin-left: calc(1em + var(--identifier-width)) !important;
+    min-width: 5em;
+  }
+  & .authors {
+    & .author {
+      display: inline-block;
+      margin-right: 1.5em;
+    }
+    & .org {
+      font-style: italic;
+    }
+  }
+}
+
+/* The prepared/rendered info at the very bottom of the page */
+.docInfo {
+  color: #999;
+  font-size: 0.9em;
+  font-style: italic;
+  margin-top: 2em;
+}
+.docInfo .prepared {
+  float: right;
+}
+
+/* table of contents */
+#toc {
+  padding: 0.75em 0 2em 0;
+  margin-bottom: 1em;
+
+  & nav {
+    & ul {
+      margin: 0 0.5em 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    & li {
+      line-height: 1.3em;
+      margin: 2px 0;
+      padding-left: 1.2em;
+      text-indent: -1.2em;
+    }
+  }
+  & a.xref {
+    white-space: normal;
+  }
+}
+
+.references {
+  & > dt {
+    text-align: right;
+    font-weight: bold;
+    min-width: 10ch;
+    margin-right: 1.5ch;
+    &:target::before {
+      content: "⇒";
+      margin: 0 10px 0 -25px;
+    }
+  }
+  & > dd {
+    margin-left: 12ch !important;
+    overflow: visible;
+    & .refInstance {
+      margin-bottom: 0.8em;
+    }
+    & .ascii {
+      margin-bottom: 0.25em;
+    }
+  }
+}
+
+#rfc\.index\.index + ul {
+  margin-left: 0;
+}
+
+/* authors */
+address.vcard {
+  font-style: normal;
+  max-width: 20em;
+  margin: 1em auto 1em 0;
+
+  & .nameRole {
+    font-weight: 700;
+    margin-left: 0;
+  }
+  & .label {
+    margin: 0.5em 0;
+  }
+  & .type {
+    display: none;
+  }
+  & .alternative-contact {
+    margin: 0.5em 0 0.25em 0;
+  }
+  & .non-ascii {
+    margin: 0 0 0 2em;
+  }
+  & div.left {
+    text-align: left;
+  }
+  & div.right {
+    text-align: right;
+  }
+}
+
+hr.addr {
+  border-top: 1px dashed;
+  margin: 0;
+  color: #ddd;
+  max-width: calc(100% - 16px);
+}
+@media (min-width: 500px) {
+  #authors-addresses > section {
+    column-count: 2;
+    column-gap: 20px;
+  }
+  #authors-addresses > section > h2 {
+    column-span: all;
+  }
+  /* hack for break-inside: avoid-column */
+  #authors-addresses address {
+    display: inline-block;
+    break-inside: avoid-column;
+  }
+}
+
+/* Comments */
+.rfcEditorRemove p:first-of-type {
+  font-style: italic;
+}
+.cref {
+  background-color: rgba(249, 232, 105, 0.3);
+  padding: 2px 4px;
+}
+.crefSource {
+  font-style: italic;
+}
+
+@media screen {
+  #toc nav {
+    font-family: var(--font-title);
+    font-weight: 360;
+    & > ul { margin-bottom: 2em; }
+    & ul {
+      margin: 0 0 0 4px;
+      & :is(p, li) {
+        margin: 2px 0;
+      }
+    }
+  }
+  #toc a.toplink {
+    float: right;
+  }
+}
+@media not screen {
+  #toc a.toplink {
+    display: none;
+  }
+}
+
+
+/* TOC layout for smaller screens */
+@media screen and (max-width: 929px) {
+  #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    padding: 1px 0 0 0;
+    margin: 0;
+    border-bottom: 1px solid #ccc;
+    opacity: 0.6;
+  }
+  #toc h2 {
+    margin: 0;
+    padding: 2px 0 2px 6px;
+    padding-right: 1em;
+    font-size: 18px;
+    line-height: 24px;
+    min-width: 190px;
+    text-align: right;
+    background-color: #444;
+    color: white;
+    cursor: pointer;
+    &::before { /* css hamburger */
+      float: right;
+      position: relative;
+      width: 1em;
+      height: 1px;
+      left: -164px;
+      margin: 8px 0 0 0;
+      background: white none repeat scroll 0 0;
+      box-shadow: 0 4px 0 0 white, 0 8px 0 0 white;
+      content: "";
+    }
+  }
+  #toc nav {
+    display: none;
+    background-color: var(--background-color);
+    padding: 0.5em 1em 1em;
+    overflow: auto;
+    overscroll-behavior: contain;
+    height: calc(100vh - 48px);
+    border-left: 1px solid #ddd;
+  }
+  #toc.active {
+    opacity: 1;
+    & nav { display: block; }
+  }
+  /* Make the collapsed ToC header render white on gray also when it's a link */
+  #toc h2 a,
+  #toc h2 a:is(:link, :focus, :hover),
+  #toc a.toplink,
+  #toc a.toplink:hover {
+    color: white;
+    background-color: #444;
+    text-decoration: none;
+  }
+  #toc a.toplink {
+    margin: 2px 0.5em 0;
+  }
+}
+
+/* TOC layout for wide screens */
+@media screen and (min-width: 930px) {
+  body {
+    padding-right: 360px;
+    padding-right: calc(min(180px + 20%, 500px));
+  }
+  #toc {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    right: calc(50vw - 480px);
+    width: 312px;
+    margin: 0;
+    padding: 0;
+    z-index: 1;
+  }
+  #toc h2 {
+    margin: 0;
+    padding: 0.25em 1em 1em 0;
+  }
+  #toc nav {
+    display: block;
+    height: calc(90vh - 84px);
+    bottom: 0;
+    padding: 0.5em 0 2em;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  img { /* future proofing */
+    max-width: 100%;
+    height: auto;
+  }
+  #toc a.toplink {
+    margin: 8px 0.5em 0;
+  }
+}
+
+/* pagination */
+@media print {
+  body {
+    width: 100%;
+  }
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+  #n-copyright-notice {
+    border-bottom: none;
+  }
+  #toc, #n-introduction {
+    page-break-before: always;
+  }
+  #toc {
+    border-top: none;
+    padding-top: 0;
+  }
+  figure, pre, .vcard {
+    page-break-inside: avoid;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  :is(h2, h3, h4, h5, h6)+*, dd {
+    page-break-before: avoid;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 10pt;
+  }
+  table {
+    border: 1px solid #ddd;
+  }
+  td {
+    border-top: 1px solid #ddd;
+  }
+}
+
+@page :first {
+  padding-top: 0;
+  @top-left {
+    content: normal;
+    border: none;
+  }
+  @top-center {
+    content: normal;
+    border: none;
+  }
+  @top-right {
+    content: normal;
+    border: none;
+  }
+}
+
+@page {
+  size: A4;
+  margin-bottom: 45mm;
+  padding-top: 20px;
+}
+
+/* Dark mode. */
+@media (prefers-color-scheme: dark) {
+:root {
+  --background-color: #121212;
+  --text-color: #f0f0f0;
+  --title-color: #fff;
+  --link-color: #4da4f0;
+  --highlight-color: #282828;
+  --line-color: #444;
+  --pilcrow-weak: #444;
+  --pilcrow-strong: #666;
+  scrollbar-color: #777 #333;
+}
+}
+
+/* SVG Trick: a prefix match works because only black and white are allowed */
+svg :is([stroke="black"], [stroke^="#000"]) {
+  stroke: var(--text-color);
+}
+svg :is([stroke="white"], [stroke^="#fff"]) {
+  stroke: var(--background-color);
+}
+svg :is([fill="black"], [fill^="#000"], :not([fill])) {
+  fill: var(--text-color);
+}
+svg :is([fill="white"], [fill^="#fff"]) {
+  fill: var(--background-color);
+}
+</style>
+
+</head>
+<body class="xml2rfc">
+<table class="ears">
+<thead><tr>
+<td class="left">Internet-Draft</td>
+<td class="center">Crypto Auditing</td>
+<td class="right">January 2026</td>
+</tr></thead>
+<tfoot><tr>
+<td class="left">Ueno</td>
+<td class="center">Expires 20 July 2026</td>
+<td class="right">[Page]</td>
+</tr></tfoot>
+</table>
+<div id="external-metadata" class="document-information"></div>
+<div id="internal-metadata" class="document-information">
+<dl id="identifiers">
+<dt class="label-workgroup">Workgroup:</dt>
+<dd class="workgroup">SAAG</dd>
+<dt class="label-internet-draft">Internet-Draft:</dt>
+<dd class="internet-draft">draft-ueno-crypto-auditing-latest</dd>
+<dt class="label-published">Published:</dt>
+<dd class="published">
+<time datetime="2026-01-16" class="published">16 January 2026</time>
+    </dd>
+<dt class="label-intended-status">Intended Status:</dt>
+<dd class="intended-status">Informational</dd>
+<dt class="label-expires">Expires:</dt>
+<dd class="expires"><time datetime="2026-07-20">20 July 2026</time></dd>
+<dt class="label-authors">Author:</dt>
+<dd class="authors">
+<div class="author">
+      <div class="author-name">D. Ueno</div>
+<div class="org">Red Hat, Inc.</div>
+</div>
+</dd>
+</dl>
+</div>
+<h1 id="title">Cryptographic Auditing Event Format and Probes</h1>
+<section id="section-abstract">
+      <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
+<p id="section-abstract-1">This document specifies an event logging format and probe interface for auditing cryptographic operations performed by applications and libraries. The format is designed to capture events at multiple abstraction levels, from low-level cryptographic primitives to high-level protocol operations such as TLS handshakes. The specification includes USDT (user statically defined tracepoints) probe definitions for instrumentation, a CBOR-based logging format for efficient storage, and a registry of event keys for common cryptographic protocols including TLS and SSH.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+</section>
+<section class="note rfcEditorRemove" id="section-note.1">
+      <h2 id="name-about-this-document">
+<a href="#name-about-this-document" class="section-name selfRef">About This Document</a>
+      </h2>
+<p id="section-note.1-1">This note is to be removed before publishing as an RFC.<a href="#section-note.1-1" class="pilcrow">¶</a></p>
+<p id="section-note.1-2">
+        The latest revision of this draft can be found at <span><a href="https://example.com/LATEST">https://example.com/LATEST</a></span>.
+        Status information for this document may be found at <span><a href="https://datatracker.ietf.org/doc/draft-ueno-crypto-auditing/">https://datatracker.ietf.org/doc/draft-ueno-crypto-auditing/</a></span>.<a href="#section-note.1-2" class="pilcrow">¶</a></p>
+<p id="section-note.1-3">
+        Discussion of this document takes place on the
+        SAAG Working Group mailing list (<span><a href="mailto:saag@ietf.org">mailto:saag@ietf.org</a></span>),
+        which is archived at <span><a href="https://mailarchive.ietf.org/arch/browse/saag/">https://mailarchive.ietf.org/arch/browse/saag/</a></span>.
+        Subscribe at <span><a href="https://www.ietf.org/mailman/listinfo/saag/">https://www.ietf.org/mailman/listinfo/saag/</a></span>.<a href="#section-note.1-3" class="pilcrow">¶</a></p>
+<p id="section-note.1-4">Source for this draft and an issue tracker can be found at
+        <span><a href="https://github.com/ueno/draft-ueno-crypto-auditing">https://github.com/ueno/draft-ueno-crypto-auditing</a></span>.<a href="#section-note.1-4" class="pilcrow">¶</a></p>
+</section>
+<div id="status-of-memo">
+<section id="section-boilerplate.1">
+        <h2 id="name-status-of-this-memo">
+<a href="#name-status-of-this-memo" class="section-name selfRef">Status of This Memo</a>
+        </h2>
+<p id="section-boilerplate.1-1">
+        This Internet-Draft is submitted in full conformance with the
+        provisions of BCP 78 and BCP 79.<a href="#section-boilerplate.1-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-2">
+        Internet-Drafts are working documents of the Internet Engineering Task
+        Force (IETF). Note that other groups may also distribute working
+        documents as Internet-Drafts. The list of current Internet-Drafts is
+        at <span><a href="https://datatracker.ietf.org/drafts/current/">https://datatracker.ietf.org/drafts/current/</a></span>.<a href="#section-boilerplate.1-2" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-3">
+        Internet-Drafts are draft documents valid for a maximum of six months
+        and may be updated, replaced, or obsoleted by other documents at any
+        time. It is inappropriate to use Internet-Drafts as reference
+        material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-4">
+        This Internet-Draft will expire on 20 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="copyright">
+<section id="section-boilerplate.2">
+        <h2 id="name-copyright-notice">
+<a href="#name-copyright-notice" class="section-name selfRef">Copyright Notice</a>
+        </h2>
+<p id="section-boilerplate.2-1">
+            Copyright (c) 2026 IETF Trust and the persons identified as the
+            document authors. All rights reserved.<a href="#section-boilerplate.2-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.2-2">
+            This document is subject to BCP 78 and the IETF Trust's Legal
+            Provisions Relating to IETF Documents
+            (<span><a href="https://trustee.ietf.org/license-info">https://trustee.ietf.org/license-info</a></span>) in effect on the date of
+            publication of this document. Please review these documents
+            carefully, as they describe your rights and restrictions with
+            respect to this document. Code Components extracted from this
+            document must include Revised BSD License text as described in
+            Section 4.e of the Trust Legal Provisions and are provided without
+            warranty as described in the Revised BSD License.<a href="#section-boilerplate.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="toc">
+<section id="section-toc.1">
+        <a href="#" onclick="scroll(0,0)" class="toplink">▲</a><h2 id="name-table-of-contents">
+<a href="#name-table-of-contents" class="section-name selfRef">Table of Contents</a>
+        </h2>
+<nav class="toc"><ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1">
+            <p id="section-toc.1-1.1.1"><a href="#section-1" class="auto internal xref">1</a>.  <a href="#name-introduction" class="internal xref">Introduction</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.1">
+                <p id="section-toc.1-1.1.2.1.1"><a href="#section-1.1" class="auto internal xref">1.1</a>.  <a href="#name-use-cases" class="internal xref">Use Cases</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.1.2.1">
+                    <p id="section-toc.1-1.1.2.1.2.1.1" class="keepWithNext"><a href="#section-1.1.1" class="auto internal xref">1.1.1</a>.  <a href="#name-aggregated-statistics-on-tl" class="internal xref">Aggregated Statistics on TLS Cipher Suites</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.1.2.2">
+                    <p id="section-toc.1-1.1.2.1.2.2.1" class="keepWithNext"><a href="#section-1.1.2" class="auto internal xref">1.1.2</a>.  <a href="#name-identifying-specific-uses-o" class="internal xref">Identifying Specific Uses of Weak Algorithms</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.1.2.3">
+                    <p id="section-toc.1-1.1.2.1.2.3.1" class="keepWithNext"><a href="#section-1.1.3" class="auto internal xref">1.1.3</a>.  <a href="#name-compliance-monitoring" class="internal xref">Compliance Monitoring</a></p>
+</li>
+                </ul>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2">
+            <p id="section-toc.1-1.2.1"><a href="#section-2" class="auto internal xref">2</a>.  <a href="#name-conventions-and-definitions" class="internal xref">Conventions and Definitions</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3">
+            <p id="section-toc.1-1.3.1"><a href="#section-3" class="auto internal xref">3</a>.  <a href="#name-usdt-probe-interface" class="internal xref">USDT Probe Interface</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.1">
+                <p id="section-toc.1-1.3.2.1.1"><a href="#section-3.1" class="auto internal xref">3.1</a>.  <a href="#name-probe-definitions" class="internal xref">Probe Definitions</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.2">
+                <p id="section-toc.1-1.3.2.2.1"><a href="#section-3.2" class="auto internal xref">3.2</a>.  <a href="#name-example-usage" class="internal xref">Example Usage</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.3">
+                <p id="section-toc.1-1.3.2.3.1"><a href="#section-3.3" class="auto internal xref">3.3</a>.  <a href="#name-protocol-semantics" class="internal xref">Protocol Semantics</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.4">
+                <p id="section-toc.1-1.3.2.4.1"><a href="#section-3.4" class="auto internal xref">3.4</a>.  <a href="#name-design-rationale" class="internal xref">Design Rationale</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.4.2.1">
+                    <p id="section-toc.1-1.3.2.4.2.1.1"><a href="#section-3.4.1" class="auto internal xref">3.4.1</a>.  <a href="#name-stability" class="internal xref">Stability</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.4.2.2">
+                    <p id="section-toc.1-1.3.2.4.2.2.1"><a href="#section-3.4.2" class="auto internal xref">3.4.2</a>.  <a href="#name-performance-considerations" class="internal xref">Performance Considerations</a></p>
+</li>
+                </ul>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4">
+            <p id="section-toc.1-1.4.1"><a href="#section-4" class="auto internal xref">4</a>.  <a href="#name-event-logging-format" class="internal xref">Event Logging Format</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.1">
+                <p id="section-toc.1-1.4.2.1.1"><a href="#section-4.1" class="auto internal xref">4.1</a>.  <a href="#name-overview" class="internal xref">Overview</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.2">
+                <p id="section-toc.1-1.4.2.2.1"><a href="#section-4.2" class="auto internal xref">4.2</a>.  <a href="#name-conceptual-model" class="internal xref">Conceptual Model</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.3">
+                <p id="section-toc.1-1.4.2.3.1"><a href="#section-4.3" class="auto internal xref">4.3</a>.  <a href="#name-context-id-construction" class="internal xref">Context ID Construction</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.4">
+                <p id="section-toc.1-1.4.2.4.1"><a href="#section-4.4" class="auto internal xref">4.4</a>.  <a href="#name-event-sequence-compression" class="internal xref">Event Sequence Compression</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.5">
+                <p id="section-toc.1-1.4.2.5.1"><a href="#section-4.5" class="auto internal xref">4.5</a>.  <a href="#name-cbor-encoding" class="internal xref">CBOR Encoding</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5">
+            <p id="section-toc.1-1.5.1"><a href="#section-5" class="auto internal xref">5</a>.  <a href="#name-event-key-registry" class="internal xref">Event Key Registry</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.1">
+                <p id="section-toc.1-1.5.2.1.1"><a href="#section-5.1" class="auto internal xref">5.1</a>.  <a href="#name-key-naming-convention" class="internal xref">Key Naming Convention</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.2">
+                <p id="section-toc.1-1.5.2.2.1"><a href="#section-5.2" class="auto internal xref">5.2</a>.  <a href="#name-generic-keys" class="internal xref">Generic Keys</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.3">
+                <p id="section-toc.1-1.5.2.3.1"><a href="#section-5.3" class="auto internal xref">5.3</a>.  <a href="#name-tls-context-names" class="internal xref">TLS Context Names</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.4">
+                <p id="section-toc.1-1.5.2.4.1"><a href="#section-5.4" class="auto internal xref">5.4</a>.  <a href="#name-tls-event-keys" class="internal xref">TLS Event Keys</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.5">
+                <p id="section-toc.1-1.5.2.5.1"><a href="#section-5.5" class="auto internal xref">5.5</a>.  <a href="#name-ssh-context-names" class="internal xref">SSH Context Names</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.6">
+                <p id="section-toc.1-1.5.2.6.1"><a href="#section-5.6" class="auto internal xref">5.6</a>.  <a href="#name-ssh-event-keys" class="internal xref">SSH Event Keys</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.6.2.1">
+                    <p id="section-toc.1-1.5.2.6.2.1.1"><a href="#section-5.6.1" class="auto internal xref">5.6.1</a>.  <a href="#name-example-ssh-context-tree" class="internal xref">Example SSH Context Tree</a></p>
+</li>
+                </ul>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.7">
+                <p id="section-toc.1-1.5.2.7.1"><a href="#section-5.7" class="auto internal xref">5.7</a>.  <a href="#name-generic-public-key-cryptogr" class="internal xref">Generic Public Key Cryptography Context Names</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.8">
+                <p id="section-toc.1-1.5.2.8.1"><a href="#section-5.8" class="auto internal xref">5.8</a>.  <a href="#name-generic-public-key-cryptogra" class="internal xref">Generic Public Key Cryptography Event Keys</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6">
+            <p id="section-toc.1-1.6.1"><a href="#section-6" class="auto internal xref">6</a>.  <a href="#name-security-considerations" class="internal xref">Security Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.1">
+                <p id="section-toc.1-1.6.2.1.1"><a href="#section-6.1" class="auto internal xref">6.1</a>.  <a href="#name-privacy-protection" class="internal xref">Privacy Protection</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.2">
+                <p id="section-toc.1-1.6.2.2.1"><a href="#section-6.2" class="auto internal xref">6.2</a>.  <a href="#name-context-id-security" class="internal xref">Context ID Security</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.3">
+                <p id="section-toc.1-1.6.2.3.1"><a href="#section-6.3" class="auto internal xref">6.3</a>.  <a href="#name-trust-model" class="internal xref">Trust Model</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.4">
+                <p id="section-toc.1-1.6.2.4.1"><a href="#section-6.4" class="auto internal xref">6.4</a>.  <a href="#name-denial-of-service" class="internal xref">Denial of Service</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7">
+            <p id="section-toc.1-1.7.1"><a href="#section-7" class="auto internal xref">7</a>.  <a href="#name-iana-considerations" class="internal xref">IANA Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.1">
+                <p id="section-toc.1-1.7.2.1.1"><a href="#section-7.1" class="auto internal xref">7.1</a>.  <a href="#name-event-key-registry-2" class="internal xref">Event Key Registry</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.2">
+                <p id="section-toc.1-1.7.2.2.1"><a href="#section-7.2" class="auto internal xref">7.2</a>.  <a href="#name-cbor-tags" class="internal xref">CBOR Tags</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
+            <p id="section-toc.1-1.8.1"><a href="#section-8" class="auto internal xref">8</a>.  <a href="#name-references" class="internal xref">References</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.1">
+                <p id="section-toc.1-1.8.2.1.1"><a href="#section-8.1" class="auto internal xref">8.1</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2">
+                <p id="section-toc.1-1.8.2.2.1"><a href="#section-8.2" class="auto internal xref">8.2</a>.  <a href="#name-informative-references" class="internal xref">Informative References</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9">
+            <p id="section-toc.1-1.9.1"><a href="#appendix-A" class="auto internal xref"></a><a href="#name-acknowledgments" class="internal xref">Acknowledgments</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10">
+            <p id="section-toc.1-1.10.1"><a href="#appendix-B" class="auto internal xref"></a><a href="#name-examples" class="internal xref">Examples</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10.2.1">
+                <p id="section-toc.1-1.10.2.1.1"><a href="#appendix-B.1" class="auto internal xref"></a><a href="#name-complete-tls-13-handshake-e" class="internal xref">Complete TLS 1.3 Handshake Example</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11">
+            <p id="section-toc.1-1.11.1"><a href="#appendix-C" class="auto internal xref"></a><a href="#name-authors-address" class="internal xref">Author's Address</a></p>
+</li>
+        </ul>
+</nav>
+</section>
+</div>
+<div id="introduction">
+<section id="section-1">
+      <h2 id="name-introduction">
+<a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
+      </h2>
+<p id="section-1-1">As security research advances, cryptographic algorithms and protocols that were once considered secure may become vulnerable to new attacks. System and organizational administrators need mechanisms to audit the actual usage of cryptographic operations to ensure compliance with security policies and to identify uses of deprecated or weak algorithms.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">While operating systems may provide system-wide mechanisms to enforce cryptographic policies (such as <span>[<a href="#CRYPTO-POLICIES" class="cite xref">CRYPTO-POLICIES</a>]</span>), administrators may relax these policies to support legacy applications. Additionally, applications can bypass system policies or use cryptography in ways not covered by policy enforcement mechanisms.<a href="#section-1-2" class="pilcrow">¶</a></p>
+<p id="section-1-3">This document specifies:<a href="#section-1-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1-4">
+<li id="section-1-4.1">
+          <p id="section-1-4.1.1">A USDT-based probe interface for instrumenting cryptographic libraries<a href="#section-1-4.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-1-4.2">
+          <p id="section-1-4.2.1">An event logging format based on hierarchical contexts<a href="#section-1-4.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-1-4.3">
+          <p id="section-1-4.3.1">A CBOR encoding for efficient storage and transmission<a href="#section-1-4.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-1-4.4">
+          <p id="section-1-4.4.1">A registry of event keys for common cryptographic operations<a href="#section-1-4.4.1" class="pilcrow">¶</a></p>
+</li>
+      </ol>
+<p id="section-1-5">The design goals include:<a href="#section-1-5" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1-6.1">
+          <p id="section-1-6.1.1"><strong>Multi-level abstraction</strong>: Capture both high-level events (e.g., TLS handshake) and low-level primitives (e.g., signature verification)<a href="#section-1-6.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-1-6.2">
+          <p id="section-1-6.2.1"><strong>Contextual organization</strong>: Group related events hierarchically<a href="#section-1-6.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-1-6.3">
+          <p id="section-1-6.3.1"><strong>Performance</strong>: Minimize overhead in monitored applications<a href="#section-1-6.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-1-6.4">
+          <p id="section-1-6.4.1"><strong>Privacy</strong>: Avoid capturing sensitive cryptographic material<a href="#section-1-6.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-1-6.5">
+          <p id="section-1-6.5.1"><strong>Stability</strong>: Provide a stable interface that libraries can implement without frequent changes<a href="#section-1-6.5.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<div id="use-cases">
+<section id="section-1.1">
+        <h3 id="name-use-cases">
+<a href="#section-1.1" class="section-number selfRef">1.1. </a><a href="#name-use-cases" class="section-name selfRef">Use Cases</a>
+        </h3>
+<div id="aggregated-statistics-on-tls-cipher-suites">
+<section id="section-1.1.1">
+          <h4 id="name-aggregated-statistics-on-tl">
+<a href="#section-1.1.1" class="section-number selfRef">1.1.1. </a><a href="#name-aggregated-statistics-on-tl" class="section-name selfRef">Aggregated Statistics on TLS Cipher Suites</a>
+          </h4>
+<p id="section-1.1.1-1">Distribution maintainers and standards bodies need data on actual cryptographic algorithm usage to make informed decisions about deprecating weak algorithms. Anonymized, aggregated statistics on TLS versions, cipher suites, key sizes, and other handshake parameters help assess the impact of tightening security defaults.<a href="#section-1.1.1-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="identifying-specific-uses-of-weak-algorithms">
+<section id="section-1.1.2">
+          <h4 id="name-identifying-specific-uses-o">
+<a href="#section-1.1.2" class="section-number selfRef">1.1.2. </a><a href="#name-identifying-specific-uses-o" class="section-name selfRef">Identifying Specific Uses of Weak Algorithms</a>
+          </h4>
+<p id="section-1.1.2-1">Security researchers periodically discover new attacks on cryptographic algorithms. For example, chosen-prefix collision attacks on SHA-1 make it unsuitable for digital signatures. However, completely disabling SHA-1 is impractical since it is widely used for non-cryptographic purposes (e.g., as a fingerprint for TLS certificates).<a href="#section-1.1.2-1" class="pilcrow">¶</a></p>
+<p id="section-1.1.2-2">Administrators need to identify which processes use weak algorithms in security-critical contexts (such as signature verification) so they can migrate to stronger alternatives and verify that migration is complete.<a href="#section-1.1.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="compliance-monitoring">
+<section id="section-1.1.3">
+          <h4 id="name-compliance-monitoring">
+<a href="#section-1.1.3" class="section-number selfRef">1.1.3. </a><a href="#name-compliance-monitoring" class="section-name selfRef">Compliance Monitoring</a>
+          </h4>
+<p id="section-1.1.3-1">Organizations may be required by law or standards to ensure their systems use only approved cryptographic algorithms. Runtime monitoring allows administrators to identify processes that use non-compliant algorithms, potentially in violation of configured policies.<a href="#section-1.1.3-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="conventions-and-definitions">
+<section id="section-2">
+      <h2 id="name-conventions-and-definitions">
+<a href="#section-2" class="section-number selfRef">2. </a><a href="#name-conventions-and-definitions" class="section-name selfRef">Conventions and Definitions</a>
+      </h2>
+<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>",
+"<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as
+described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they
+appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="usdt-probe-interface">
+<section id="section-3">
+      <h2 id="name-usdt-probe-interface">
+<a href="#section-3" class="section-number selfRef">3. </a><a href="#name-usdt-probe-interface" class="section-name selfRef">USDT Probe Interface</a>
+      </h2>
+<p id="section-3-1">Programs being traced (typically cryptographic libraries) define USDT (user statically defined tracepoints) probes to notify monitoring agents of cryptographic events. This section specifies the probe interface.<a href="#section-3-1" class="pilcrow">¶</a></p>
+<div id="probe-definitions">
+<section id="section-3.1">
+        <h3 id="name-probe-definitions">
+<a href="#section-3.1" class="section-number selfRef">3.1. </a><a href="#name-probe-definitions" class="section-name selfRef">Probe Definitions</a>
+        </h3>
+<p id="section-3.1-1">Libraries define four types of probes using the following macros:<a href="#section-3.1-1" class="pilcrow">¶</a></p>
+<div class="lang-c sourcecode" id="section-3.1-2">
+<pre>
+/* Introduce a new context CONTEXT, derived from PARENT */
+#define CRYPTO_AUDITING_NEW_CONTEXT(context, parent) \
+    DTRACE_PROBE2(crypto_auditing, new_context, context, parent)
+
+/* Assert an event with KEY and VALUE. The key is treated as a
+ * NUL-terminated string, while the value is in the size of
+ * machine word
+ */
+#define CRYPTO_AUDITING_WORD_DATA(context, key_ptr, value_ptr) \
+    DTRACE_PROBE3(crypto_auditing, word_data, context, \
+                  key_ptr, value_ptr)
+
+/* Assert an event with KEY and VALUE. Both the key and value are
+ * treated as a NUL-terminated string
+ */
+#define CRYPTO_AUDITING_STRING_DATA(context, key_ptr, value_ptr) \
+    DTRACE_PROBE3(crypto_auditing, string_data, context, \
+                  key_ptr, value_ptr)
+
+/* Assert an event with KEY and VALUE. The key is treated as a
+ * NUL-terminated string, while the value is explicitly sized
+ * with VALUE_SIZE
+ */
+#define CRYPTO_AUDITING_BLOB_DATA(context, key_ptr, \
+                                   value_ptr, value_size) \
+    DTRACE_PROBE4(crypto_auditing, blob_data, context, \
+                  key_ptr, value_ptr, value_size)
+</pre><a href="#section-3.1-2" class="pilcrow">¶</a>
+</div>
+<p id="section-3.1-3">The <code>context</code> parameter can be any object with the size of a machine word (a pointer or <code>long</code>, i.e., a 64-bit integer on 64-bit systems).<a href="#section-3.1-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="example-usage">
+<section id="section-3.2">
+        <h3 id="name-example-usage">
+<a href="#section-3.2" class="section-number selfRef">3.2. </a><a href="#name-example-usage" class="section-name selfRef">Example Usage</a>
+        </h3>
+<p id="section-3.2-1">The following example demonstrates how a TLS library might instrument a client handshake:<a href="#section-3.2-1" class="pilcrow">¶</a></p>
+<div class="lang-c sourcecode" id="section-3.2-2">
+<pre>
+/* Start TLS client handshake */
+CRYPTO_AUDITING_NEW_CONTEXT(context, NULL);
+
+/* Indicate that this context is about TLS client handshake */
+CRYPTO_AUDITING_STRING_DATA(context, "name",
+                             "tls::handshake_client");
+
+/* Indicate that TLS 1.3 is selected */
+CRYPTO_AUDITING_WORD_DATA(context, "tls::protocol_version", 0x0304);
+</pre><a href="#section-3.2-2" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+<div id="protocol-semantics">
+<section id="section-3.3">
+        <h3 id="name-protocol-semantics">
+<a href="#section-3.3" class="section-number selfRef">3.3. </a><a href="#name-protocol-semantics" class="section-name selfRef">Protocol Semantics</a>
+        </h3>
+<p id="section-3.3-1">The four probe types have the following semantics:<a href="#section-3.3-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-3.3-2.1">
+            <p id="section-3.3-2.1.1"><code>new_context(context, parent)</code>: Introduce a new context under a given parent. If <code>parent</code> is NULL or 0, the context has no parent.<a href="#section-3.3-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-3.3-2.2">
+            <p id="section-3.3-2.2.1"><code>word_data(context, key, value)</code>: Emit an event with a machine-word-sized value<a href="#section-3.3-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-3.3-2.3">
+            <p id="section-3.3-2.3.1"><code>string_data(context, key, value)</code>: Emit an event with a NUL-terminated string value<a href="#section-3.3-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-3.3-2.4">
+            <p id="section-3.3-2.4.1"><code>blob_data(context, key, value, value_size)</code>: Emit an event with a binary blob of specified size<a href="#section-3.3-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+</section>
+</div>
+<div id="design-rationale">
+<section id="section-3.4">
+        <h3 id="name-design-rationale">
+<a href="#section-3.4" class="section-number selfRef">3.4. </a><a href="#name-design-rationale" class="section-name selfRef">Design Rationale</a>
+        </h3>
+<div id="stability">
+<section id="section-3.4.1">
+          <h4 id="name-stability">
+<a href="#section-3.4.1" class="section-number selfRef">3.4.1. </a><a href="#name-stability" class="section-name selfRef">Stability</a>
+          </h4>
+<p id="section-3.4.1-1">The probe interface is designed to be stable across library versions. By using generic key-value pairs rather than implementation-specific parameters, libraries can evolve their internal representations without breaking the probe interface. Only the set of emitted keys and their semantics need to be coordinated, which can be done through the event registry (<a href="#event-registry" class="auto internal xref">Section 5</a>).<a href="#section-3.4.1-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="performance-considerations">
+<section id="section-3.4.2">
+          <h4 id="name-performance-considerations">
+<a href="#section-3.4.2" class="section-number selfRef">3.4.2. </a><a href="#name-performance-considerations" class="section-name selfRef">Performance Considerations</a>
+          </h4>
+<p id="section-3.4.2-1">String keys provide flexibility but require BPF programs to access userspace memory using <code>bpf_probe_read_user_str</code>. If this overhead proves excessive in practice, future versions might define integer codepoints for common keys while maintaining backward compatibility through a mapping table.<a href="#section-3.4.2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="event-logging-format">
+<section id="section-4">
+      <h2 id="name-event-logging-format">
+<a href="#section-4" class="section-number selfRef">4. </a><a href="#name-event-logging-format" class="section-name selfRef">Event Logging Format</a>
+      </h2>
+<div id="overview">
+<section id="section-4.1">
+        <h3 id="name-overview">
+<a href="#section-4.1" class="section-number selfRef">4.1. </a><a href="#name-overview" class="section-name selfRef">Overview</a>
+        </h3>
+<p id="section-4.1-1">The logging format is a stream of structured event entries organized hierarchically by context. Events are classified into two categories:<a href="#section-4.1-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.1-2.1">
+            <p id="section-4.1-2.1.1"><strong>Context mapping events</strong>: Establish parent-child relationships between contexts<a href="#section-4.1-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-4.1-2.2">
+            <p id="section-4.1-2.2.1"><strong>Data events</strong>: Represent actual cryptographic events as key-value pairs<a href="#section-4.1-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-4.1-3">Contexts are identified by unique 16-byte values included in all events. This allows events from multiple processes or concurrent operations to be interleaved in the log stream while remaining separable for analysis.<a href="#section-4.1-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="conceptual-model">
+<section id="section-4.2">
+        <h3 id="name-conceptual-model">
+<a href="#section-4.2" class="section-number selfRef">4.2. </a><a href="#name-conceptual-model" class="section-name selfRef">Conceptual Model</a>
+        </h3>
+<p id="section-4.2-1">The following JSON representation illustrates the conceptual structure of events for a TLS client handshake that includes digital signature verification (actual logs use a binary CBOR format):<a href="#section-4.2-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="section-4.2-2">
+<pre>
+[
+    {
+        "type": "new_context",
+        "context": "00..01",
+        "parent": "00..00"
+    },
+    {
+        "type": "string_data",
+        "context": "00..01",
+        "name": "tls::handshake_client"
+    },
+    {
+        "type": "word_data",
+        "context": "00..01",
+        "tls::protocol_version": 0x0304
+    },
+    {
+        "type": "new_context",
+        "context": "00..02",
+        "parent": "00..01"
+    },
+    {
+        "type": "string_data",
+        "context": "00..02",
+        "name": "tls::certificate_verify"
+    },
+    {
+        "type": "word_data",
+        "context": "00..02",
+        "tls::signature_algorithm": 0x0804
+    },
+    {
+        "type": "word_data",
+        "context": "00..02",
+        "pk::bits": 3072
+    }
+]
+</pre><a href="#section-4.2-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.2-3">This can be conceptually represented as a tree:<a href="#section-4.2-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.2-4.1">
+            <p id="section-4.2-4.1.1"><code>tls::handshake_client</code> (00..01)<a href="#section-4.2-4.1.1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.2-4.1.2.1">
+                <p id="section-4.2-4.1.2.1.1"><code>tls::protocol_version</code> = 0x0304<a href="#section-4.2-4.1.2.1.1" class="pilcrow">¶</a></p>
+</li>
+              <li class="normal" id="section-4.2-4.1.2.2">
+                <p id="section-4.2-4.1.2.2.1"><code>tls::certificate_verify</code> (00..02)<a href="#section-4.2-4.1.2.2.1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.2-4.1.2.2.2.1">
+                    <p id="section-4.2-4.1.2.2.2.1.1"><code>tls::signature_algorithm</code> = 0x0804<a href="#section-4.2-4.1.2.2.2.1.1" class="pilcrow">¶</a></p>
+</li>
+                  <li class="normal" id="section-4.2-4.1.2.2.2.2">
+                    <p id="section-4.2-4.1.2.2.2.2.1"><code>pk::bits</code> = 3072<a href="#section-4.2-4.1.2.2.2.2.1" class="pilcrow">¶</a></p>
+</li>
+                </ul>
+</li>
+            </ul>
+</li>
+        </ul>
+</section>
+</div>
+<div id="context-id-construction">
+<section id="section-4.3">
+        <h3 id="name-context-id-construction">
+<a href="#section-4.3" class="section-number selfRef">4.3. </a><a href="#name-context-id-construction" class="section-name selfRef">Context ID Construction</a>
+        </h3>
+<p id="section-4.3-1">For security and privacy reasons, context IDs <span class="bcp14">MUST</span> be constructed to be indistinguishable from the internal state of target programs (e.g., PID or memory address), even though such information <span class="bcp14">MAY</span> be used as input to the construction algorithm.<a href="#section-4.3-1" class="pilcrow">¶</a></p>
+<p id="section-4.3-2">The <span class="bcp14">RECOMMENDED</span> construction algorithm is:<a href="#section-4.3-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-4.3-3">
+<li id="section-4.3-3.1">
+            <p id="section-4.3-3.1.1">The monitoring agent initializes an AES encryption key at startup<a href="#section-4.3-3.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-4.3-3.2">
+            <p id="section-4.3-3.2.1">An 8-byte context identifier and an 8-byte PID/TGID of the target program are concatenated to form a 16-byte input (one AES block)<a href="#section-4.3-3.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-4.3-3.3">
+            <p id="section-4.3-3.3.1">The 16-byte input is encrypted using AES-ECB with the key from step 1<a href="#section-4.3-3.3.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+<p id="section-4.3-4">This approach is inspired by record number encryption in QUIC and DTLS 1.3 <span>[<a href="#RFC9147" class="cite xref">RFC9147</a>]</span>. With AES-NI instruction support, this procedure requires approximately 15 CPU cycles.<a href="#section-4.3-4" class="pilcrow">¶</a></p>
+<p id="section-4.3-5">Agents <span class="bcp14">MAY</span> periodically rotate the encryption key.<a href="#section-4.3-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="event-sequence-compression">
+<section id="section-4.4">
+        <h3 id="name-event-sequence-compression">
+<a href="#section-4.4" class="section-number selfRef">4.4. </a><a href="#name-event-sequence-compression" class="section-name selfRef">Event Sequence Compression</a>
+        </h3>
+<p id="section-4.4-1">When multiple events are emitted within a single context in a short time window, the same context ID would be written repeatedly. To reduce storage overhead, implementations <span class="bcp14">MAY</span> compress subsequent events sharing the same context ID:<a href="#section-4.4-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="section-4.4-2">
+<pre>
+[
+    {
+        "context": "00..01",
+        "events": [
+            {
+                "type": "new_context",
+                "parent": "00..00"
+            },
+            {
+                "type": "string_data",
+                "name": "tls::handshake_client"
+            },
+            {
+                "type": "word_data",
+                "tls::protocol_version": 0x0304
+            }
+        ]
+    },
+    {
+        "context": "00..02",
+        "events": [
+            {
+                "type": "new_context",
+                "parent": "00..01"
+            },
+            {
+                "type": "string_data",
+                "name": "tls::certificate_verify"
+            },
+            {
+                "type": "word_data",
+                "tls::signature_algorithm": 0x0804
+            },
+            {
+                "type": "word_data",
+                "pk::bits": 3072
+            }
+        ]
+    }
+]
+</pre><a href="#section-4.4-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.4-3">This compression preserves the same semantics as the uncompressed form.<a href="#section-4.4-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="cbor-encoding">
+<section id="section-4.5">
+        <h3 id="name-cbor-encoding">
+<a href="#section-4.5" class="section-number selfRef">4.5. </a><a href="#name-cbor-encoding" class="section-name selfRef">CBOR Encoding</a>
+        </h3>
+<p id="section-4.5-1">The <span class="bcp14">RECOMMENDED</span> storage format uses CBOR <span>[<a href="#RFC7049" class="cite xref">RFC7049</a>]</span> (Concise Binary Object Representation). The following CDDL <span>[<a href="#RFC8610" class="cite xref">RFC8610</a>]</span> (Concise Data Definition Language) specification defines the format:<a href="#section-4.5-1" class="pilcrow">¶</a></p>
+<div class="lang-cddl sourcecode" id="section-4.5-2">
+<pre>
+LogEntry = EventGroup
+
+EventGroup = {
+  context: ContextID
+  start: time
+  end: time
+  events: [+ Event]
+}
+
+Event = NewContext / Data
+
+ContextID = bstr .size 16
+
+NewContext = {
+  NewContext: {
+    parent: ContextID
+  }
+}
+
+Data = {
+  Data: {
+    key: tstr
+    value: uint .size 8 / tstr / bstr
+  }
+}
+</pre><a href="#section-4.5-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.5-3">The log consists of a series of <code>EventGroup</code> objects. Each group contains events that occurred within a time window from <code>start</code> to <code>end</code>. Timestamps are represented as monotonic durations from the kernel boot time. <code>ContextID</code> is the encrypted 16-byte context identifier.<a href="#section-4.5-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="event-registry">
+<section id="section-5">
+      <h2 id="name-event-key-registry">
+<a href="#section-5" class="section-number selfRef">5. </a><a href="#name-event-key-registry" class="section-name selfRef">Event Key Registry</a>
+      </h2>
+<div id="key-naming-convention">
+<section id="section-5.1">
+        <h3 id="name-key-naming-convention">
+<a href="#section-5.1" class="section-number selfRef">5.1. </a><a href="#name-key-naming-convention" class="section-name selfRef">Key Naming Convention</a>
+        </h3>
+<p id="section-5.1-1">Event keys follow one of two patterns:<a href="#section-5.1-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-5.1-2.1">
+            <p id="section-5.1-2.1.1"><strong>Generic keys</strong>: Consist of alphanumeric characters and underscores<a href="#section-5.1-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-5.1-2.2">
+            <p id="section-5.1-2.2.1"><strong>Scoped keys</strong>: Have a namespace prefix ending with "::"<a href="#section-5.1-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-5.1-3">In ABNF notation:<a href="#section-5.1-3" class="pilcrow">¶</a></p>
+<div class="lang-abnf sourcecode" id="section-5.1-4">
+<pre>
+name = ALPHA *(ALPHA / DIGIT / "_")
+generic_key = name
+scoped_key = name "::" name
+</pre><a href="#section-5.1-4" class="pilcrow">¶</a>
+</div>
+<p id="section-5.1-5">Keys also determine value types. For example, <code>name</code> takes a string value, while <code>tls::protocol_version</code> takes a 16-bit unsigned integer.<a href="#section-5.1-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="generic-keys">
+<section id="section-5.2">
+        <h3 id="name-generic-keys">
+<a href="#section-5.2" class="section-number selfRef">5.2. </a><a href="#name-generic-keys" class="section-name selfRef">Generic Keys</a>
+        </h3>
+<table class="center" id="table-1">
+          <caption><a href="#table-1" class="selfRef">Table 1</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Key</th>
+              <th class="text-left" rowspan="1" colspan="1">Value Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>name</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">The name of the current context (from table below)</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="tls-context-names">
+<section id="section-5.3">
+        <h3 id="name-tls-context-names">
+<a href="#section-5.3" class="section-number selfRef">5.3. </a><a href="#name-tls-context-names" class="section-name selfRef">TLS Context Names</a>
+        </h3>
+<table class="center" id="table-2">
+          <caption><a href="#table-2" class="selfRef">Table 2</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Name</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::handshake_client</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">TLS handshake for client</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::handshake_server</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">TLS handshake for server</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::certificate_sign</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Digital signature created using certificate in TLS handshake</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::certificate_verify</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Digital signature verified using certificate in TLS handshake</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::key_exchange</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Shared secret derivation in TLS handshake</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="tls-event-keys">
+<section id="section-5.4">
+        <h3 id="name-tls-event-keys">
+<a href="#section-5.4" class="section-number selfRef">5.4. </a><a href="#name-tls-event-keys" class="section-name selfRef">TLS Event Keys</a>
+        </h3>
+<table class="center" id="table-3">
+          <caption><a href="#table-3" class="selfRef">Table 3</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Key</th>
+              <th class="text-left" rowspan="1" colspan="1">Value Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::protocol_version</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Negotiated TLS version</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::ciphersuite</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Negotiated ciphersuite (IANA TLS Cipher Suite registry)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::signature_algorithm</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Signature algorithm used (IANA TLS SignatureScheme registry)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::key_exchange_algorithm</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Key exchange mode: ECDHE(0), DHE(1), PSK(2), ECDHE-PSK(3), DHE-PSK(4)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::group</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Groups used in handshake (IANA TLS Supported Groups registry)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>tls::ext::extended_master_secret</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Present when extended_master_secret extension is negotiated (value ignored)</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="ssh-context-names">
+<section id="section-5.5">
+        <h3 id="name-ssh-context-names">
+<a href="#section-5.5" class="section-number selfRef">5.5. </a><a href="#name-ssh-context-names" class="section-name selfRef">SSH Context Names</a>
+        </h3>
+<table class="center" id="table-4">
+          <caption><a href="#table-4" class="selfRef">Table 4</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Name</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::handshake_client</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">SSH handshake for client</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::handshake_server</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">SSH handshake for server</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::client_key</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">SSH client key signature/verification</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::server_key</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">SSH server key signature/verification</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::key_exchange</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">SSH key exchange</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="ssh-event-keys">
+<section id="section-5.6">
+        <h3 id="name-ssh-event-keys">
+<a href="#section-5.6" class="section-number selfRef">5.6. </a><a href="#name-ssh-event-keys" class="section-name selfRef">SSH Event Keys</a>
+        </h3>
+<p id="section-5.6-1">All keys except <code>ssh::rsa_bits</code> have <code>string</code> type. Server and client values are distinguished by context.<a href="#section-5.6-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-5">
+          <caption><a href="#table-5" class="selfRef">Table 5</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Key</th>
+              <th class="text-left" rowspan="1" colspan="1">Value Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+              <th class="text-left" rowspan="1" colspan="1">Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::ident_string</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Software identification string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>SSH-2.0-OpenSSH_8.8</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::peer_ident_string</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Peer software identification string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>SSH-2.0-OpenSSH_8.8</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::key_algorithm</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Key used in handshake/key ownership proof</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh-ed25519</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::rsa_bits</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Key bits (RSA only)</td>
+              <td class="text-left" rowspan="1" colspan="1">2048</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::cert_signature_algorithm</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">If cert is used, signature algorithm of cert</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ecdsa-sha2-nistp521</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::kex_algorithm</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Negotiated key exchange algorithm</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>curve25519-sha256</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::kex_group</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Group used for key exchange</td>
+              <td class="text-left" rowspan="1" colspan="1">moduli+bits or group name</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::c2s_cipher</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Client-to-server cipher algorithm</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>aes256-gcm@openssh.com</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::s2c_cipher</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Server-to-client cipher algorithm</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>aes256-gcm@openssh.com</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::c2s_mac</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Client-to-server MAC (omitted for implicit)</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>umac-128-etm@openssh.com</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::s2c_mac</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Server-to-client MAC (omitted for implicit)</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>umac-128-etm@openssh.com</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::c2s_compression</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Client-to-server compression (omitted for none)</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>zlib@openssh.com</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>ssh::s2c_compression</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Server-to-client compression (omitted for none)</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>zlib@openssh.com</code>
+</td>
+            </tr>
+          </tbody>
+        </table>
+<div id="example-ssh-context-tree">
+<section id="section-5.6.1">
+          <h4 id="name-example-ssh-context-tree">
+<a href="#section-5.6.1" class="section-number selfRef">5.6.1. </a><a href="#name-example-ssh-context-tree" class="section-name selfRef">Example SSH Context Tree</a>
+          </h4>
+<div class="alignLeft art-text artwork" id="section-5.6.1-1">
+<pre>
+- ssh::handshake_client
+  - ssh::ident_string = SSH-2.0-OpenSSH_8.8
+  - ssh::peer_ident_string = SSH-2.0-OpenSSH_8.8
+  - ssh::key_exchange
+    - ssh::kex_algorithm = curve25519-sha256
+    - ssh::key_algorithm = ssh-ed25519
+    - ssh::s2c_cipher = aes256-gcm@openssh.com
+    - ssh::c2s_cipher = aes256-gcm@openssh.com
+  - ssh::server_key
+    - ssh::key_algorithm = ssh-ed25519
+  - ssh::client_key
+    - ssh::key_algorithm = ssh-ed25519
+</pre><a href="#section-5.6.1-1" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="generic-public-key-cryptography-context-names">
+<section id="section-5.7">
+        <h3 id="name-generic-public-key-cryptogr">
+<a href="#section-5.7" class="section-number selfRef">5.7. </a><a href="#name-generic-public-key-cryptogr" class="section-name selfRef">Generic Public Key Cryptography Context Names</a>
+        </h3>
+<p id="section-5.7-1">These contexts are used when a public key operation cannot be determined from the outer context. If the operation is obvious from the parent context (e.g., <code>tls::certificate_verify</code> implies verification), implementations <span class="bcp14">MAY</span> omit creating a new context.<a href="#section-5.7-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-6">
+          <caption><a href="#table-6" class="selfRef">Table 6</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Name</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::sign</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Digital signature created</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::verify</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Digital signature verified</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::encrypt</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Encryption performed</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::decrypt</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Decryption performed</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::encapsulate</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Session key encapsulated</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::decapsulate</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Session key decapsulated</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::generate</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Private key generated</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::derive</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Shared secret derived</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="generic-public-key-cryptography-event-keys">
+<section id="section-5.8">
+        <h3 id="name-generic-public-key-cryptogra">
+<a href="#section-5.8" class="section-number selfRef">5.8. </a><a href="#name-generic-public-key-cryptogra" class="section-name selfRef">Generic Public Key Cryptography Event Keys</a>
+        </h3>
+<p id="section-5.8-1">These keys can be attached to any context. They are useful when algorithm parameters cannot be determined from the outer context. If parameters are obvious from the parent context (e.g., <code>tls::signature_algorithm</code> is present), implementations <span class="bcp14">MAY</span> omit these events.<a href="#section-5.8-1" class="pilcrow">¶</a></p>
+<p id="section-5.8-2">All keys except <code>pk::bits</code> and <code>pk::static</code> have <code>string</code> type. String values can be arbitrary; it is the responsibility of data consumers to correlate them.<a href="#section-5.8-2" class="pilcrow">¶</a></p>
+<table class="center" id="table-7">
+          <caption><a href="#table-7" class="selfRef">Table 7</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Key</th>
+              <th class="text-left" rowspan="1" colspan="1">Value Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::algorithm</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Algorithm name</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::curve</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Elliptic curve name</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::group</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">FFDH group name</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::bits</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Key strength in bits</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::hash</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Hash algorithm (for prehashed/parametrized schemes: ECDSA, RSA-PSS, RSA-OAEP)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>pk::static</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint16</td>
+              <td class="text-left" rowspan="1" colspan="1">Present when <code>pk::derive</code> uses reused keys (value ignored)</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+</section>
+</div>
+<div id="security-considerations">
+<section id="section-6">
+      <h2 id="name-security-considerations">
+<a href="#section-6" class="section-number selfRef">6. </a><a href="#name-security-considerations" class="section-name selfRef">Security Considerations</a>
+      </h2>
+<div id="privacy-protection">
+<section id="section-6.1">
+        <h3 id="name-privacy-protection">
+<a href="#section-6.1" class="section-number selfRef">6.1. </a><a href="#name-privacy-protection" class="section-name selfRef">Privacy Protection</a>
+        </h3>
+<p id="section-6.1-1">The logging format is designed to avoid capturing sensitive cryptographic material such as private keys, session keys, or plaintext data. Only algorithm identifiers, key sizes, and protocol parameters are logged.<a href="#section-6.1-1" class="pilcrow">¶</a></p>
+<p id="section-6.1-2">However, implementations <span class="bcp14">MUST</span> ensure that:<a href="#section-6.1-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-6.1-3">
+<li id="section-6.1-3.1">
+            <p id="section-6.1-3.1.1">Context IDs cannot be correlated with internal program state (PIDs, memory addresses) by external observers<a href="#section-6.1-3.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-6.1-3.2">
+            <p id="section-6.1-3.2.1">Timestamps and event sequences do not leak sensitive information about user behavior<a href="#section-6.1-3.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-6.1-3.3">
+            <p id="section-6.1-3.3.1">Aggregated statistics are properly anonymized before collection<a href="#section-6.1-3.3.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+</section>
+</div>
+<div id="context-id-security">
+<section id="section-6.2">
+        <h3 id="name-context-id-security">
+<a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-context-id-security" class="section-name selfRef">Context ID Security</a>
+        </h3>
+<p id="section-6.2-1">The AES-ECB encryption of context IDs prevents external observers from:<a href="#section-6.2-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6.2-2.1">
+            <p id="section-6.2-2.1.1">Determining the PID or TGID of monitored processes<a href="#section-6.2-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.2-2.2">
+            <p id="section-6.2-2.2.1">Correlating events across different monitoring sessions (if keys are rotated)<a href="#section-6.2-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.2-2.3">
+            <p id="section-6.2-2.3.1">Predicting future context IDs<a href="#section-6.2-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-6.2-3">Agents <span class="bcp14">SHOULD</span> rotate encryption keys periodically and <span class="bcp14">SHOULD</span> use cryptographically secure random number generators to create initial keys.<a href="#section-6.2-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="trust-model">
+<section id="section-6.3">
+        <h3 id="name-trust-model">
+<a href="#section-6.3" class="section-number selfRef">6.3. </a><a href="#name-trust-model" class="section-name selfRef">Trust Model</a>
+        </h3>
+<p id="section-6.3-1">The architecture assumes that monitored libraries and the monitoring agent are trustworthy. Malicious libraries could:<a href="#section-6.3-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6.3-2.1">
+            <p id="section-6.3-2.1.1">Emit false events<a href="#section-6.3-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.3-2.2">
+            <p id="section-6.3-2.2.1">Omit security-relevant events<a href="#section-6.3-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.3-2.3">
+            <p id="section-6.3-2.3.1">Emit events designed to fingerprint or track users<a href="#section-6.3-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-6.3-3">Deployments requiring strong integrity guarantees <span class="bcp14">SHOULD</span> use additional mechanisms such as:<a href="#section-6.3-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6.3-4.1">
+            <p id="section-6.3-4.1.1">SELinux or AppArmor policies restricting which processes can emit events<a href="#section-6.3-4.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.3-4.2">
+            <p id="section-6.3-4.2.1">Integrity measurement architecture (IMA) to verify monitored binaries<a href="#section-6.3-4.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.3-4.3">
+            <p id="section-6.3-4.3.1">Cryptographic signatures on log files<a href="#section-6.3-4.3.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+</section>
+</div>
+<div id="denial-of-service">
+<section id="section-6.4">
+        <h3 id="name-denial-of-service">
+<a href="#section-6.4" class="section-number selfRef">6.4. </a><a href="#name-denial-of-service" class="section-name selfRef">Denial of Service</a>
+        </h3>
+<p id="section-6.4-1">Malicious applications could attempt to overwhelm the monitoring agent by generating excessive probe events. Implementations <span class="bcp14">SHOULD</span> implement rate limiting and resource quotas to prevent denial of service.<a href="#section-6.4-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="iana-considerations">
+<section id="section-7">
+      <h2 id="name-iana-considerations">
+<a href="#section-7" class="section-number selfRef">7. </a><a href="#name-iana-considerations" class="section-name selfRef">IANA Considerations</a>
+      </h2>
+<div id="event-key-registry">
+<section id="section-7.1">
+        <h3 id="name-event-key-registry-2">
+<a href="#section-7.1" class="section-number selfRef">7.1. </a><a href="#name-event-key-registry-2" class="section-name selfRef">Event Key Registry</a>
+        </h3>
+<p id="section-7.1-1">IANA is requested to create a new registry titled "Cryptographic Auditing Event Keys" under a new "Cryptographic Auditing" category.<a href="#section-7.1-1" class="pilcrow">¶</a></p>
+<p id="section-7.1-2">The registry should track:<a href="#section-7.1-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-7.1-3.1">
+            <p id="section-7.1-3.1.1">Key name (e.g., <code>tls::protocol_version</code>)<a href="#section-7.1-3.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-3.2">
+            <p id="section-7.1-3.2.1">Value type (uint16, uint32, string, bstr)<a href="#section-7.1-3.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-3.3">
+            <p id="section-7.1-3.3.1">Description<a href="#section-7.1-3.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-3.4">
+            <p id="section-7.1-3.4.1">Reference<a href="#section-7.1-3.4.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-7.1-4">Initial entries are defined in <a href="#event-registry" class="auto internal xref">Section 5</a>.<a href="#section-7.1-4" class="pilcrow">¶</a></p>
+<p id="section-7.1-5">Registration policy: Specification Required (RFC 8126)<a href="#section-7.1-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="cbor-tags">
+<section id="section-7.2">
+        <h3 id="name-cbor-tags">
+<a href="#section-7.2" class="section-number selfRef">7.2. </a><a href="#name-cbor-tags" class="section-name selfRef">CBOR Tags</a>
+        </h3>
+<p id="section-7.2-1">This document does not define new CBOR tags. Future extensions <span class="bcp14">MAY</span> request CBOR tag allocations if specialized encoding is needed for specific event types.<a href="#section-7.2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="sec-combined-references">
+<section id="section-8">
+      <h2 id="name-references">
+<a href="#section-8" class="section-number selfRef">8. </a><a href="#name-references" class="section-name selfRef">References</a>
+      </h2>
+<div id="sec-normative-references">
+<section id="section-8.1">
+        <h3 id="name-normative-references">
+<a href="#section-8.1" class="section-number selfRef">8.1. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
+        </h3>
+<dl class="references">
+<dt id="RFC2119">[RFC2119]</dt>
+        <dd>
+<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc2119">https://www.rfc-editor.org/rfc/rfc2119</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7049">[RFC7049]</dt>
+        <dd>
+<span class="refAuthor">Bormann, C.</span> and <span class="refAuthor">P. Hoffman</span>, <span class="refTitle">"Concise Binary Object Representation (CBOR)"</span>, <span class="seriesInfo">RFC 7049</span>, <span class="seriesInfo">DOI 10.17487/RFC7049</span>, <time datetime="2013-10" class="refDate">October 2013</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7049">https://www.rfc-editor.org/rfc/rfc7049</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8174">[RFC8174]</dt>
+        <dd>
+<span class="refAuthor">Leiba, B.</span>, <span class="refTitle">"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 8174</span>, <span class="seriesInfo">DOI 10.17487/RFC8174</span>, <time datetime="2017-05" class="refDate">May 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8174">https://www.rfc-editor.org/rfc/rfc8174</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8446">[RFC8446]</dt>
+        <dd>
+<span class="refAuthor">Rescorla, E.</span>, <span class="refTitle">"The Transport Layer Security (TLS) Protocol Version 1.3"</span>, <span class="seriesInfo">RFC 8446</span>, <span class="seriesInfo">DOI 10.17487/RFC8446</span>, <time datetime="2018-08" class="refDate">August 2018</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8446">https://www.rfc-editor.org/rfc/rfc8446</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8610">[RFC8610]</dt>
+      <dd>
+<span class="refAuthor">Birkholz, H.</span>, <span class="refAuthor">Vigano, C.</span>, and <span class="refAuthor">C. Bormann</span>, <span class="refTitle">"Concise Data Definition Language (CDDL): A Notational Convention to Express Concise Binary Object Representation (CBOR) and JSON Data Structures"</span>, <span class="seriesInfo">RFC 8610</span>, <span class="seriesInfo">DOI 10.17487/RFC8610</span>, <time datetime="2019-06" class="refDate">June 2019</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8610">https://www.rfc-editor.org/rfc/rfc8610</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="sec-informative-references">
+<section id="section-8.2">
+        <h3 id="name-informative-references">
+<a href="#section-8.2" class="section-number selfRef">8.2. </a><a href="#name-informative-references" class="section-name selfRef">Informative References</a>
+        </h3>
+<dl class="references">
+<dt id="CRYPTO-POLICIES">[CRYPTO-POLICIES]</dt>
+        <dd>
+<span class="refTitle">"Fedora Crypto Policies"</span>, <time datetime="2024" class="refDate">2024</time>, <span>&lt;<a href="https://gitlab.com/redhat-crypto/fedora-crypto-policies/">https://gitlab.com/redhat-crypto/fedora-crypto-policies/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="FIPS186-4">[FIPS186-4]</dt>
+        <dd>
+<span class="refTitle">"Digital Signature Standard (DSS)"</span>, <time datetime="2013-07" class="refDate">July 2013</time>, <span>&lt;<a href="https://csrc.nist.gov/publications/detail/fips/186/4/final">https://csrc.nist.gov/publications/detail/fips/186/4/final</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9147">[RFC9147]</dt>
+        <dd>
+<span class="refAuthor">Rescorla, E.</span>, <span class="refAuthor">Tschofenig, H.</span>, and <span class="refAuthor">N. Modadugu</span>, <span class="refTitle">"The Datagram Transport Layer Security (DTLS) Protocol Version 1.3"</span>, <span class="seriesInfo">RFC 9147</span>, <span class="seriesInfo">DOI 10.17487/RFC9147</span>, <time datetime="2022-04" class="refDate">April 2022</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9147">https://www.rfc-editor.org/rfc/rfc9147</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="SP800-90A">[SP800-90A]</dt>
+        <dd>
+<span class="refTitle">"Recommendation for Random Number Generation Using Deterministic Random Bit Generators"</span>, <time datetime="2015-06" class="refDate">June 2015</time>, <span>&lt;<a href="https://csrc.nist.gov/publications/detail/sp/800-90a/rev-1/final">https://csrc.nist.gov/publications/detail/sp/800-90a/rev-1/final</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="USDT">[USDT]</dt>
+      <dd>
+<span class="refTitle">"User-space probes for BPF"</span>, <time datetime="2018-03" class="refDate">March 2018</time>, <span>&lt;<a href="https://lwn.net/Articles/753601/">https://lwn.net/Articles/753601/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+</section>
+</div>
+<div id="acknowledgments">
+<section id="appendix-A">
+      <h2 id="name-acknowledgments">
+<a href="#name-acknowledgments" class="section-name selfRef">Acknowledgments</a>
+      </h2>
+<p id="appendix-A-1">The authors would like to thank the cryptographic library maintainers who provided feedback on the probe interface design, including developers from GnuTLS, OpenSSL, and OpenSSH projects.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+<p id="appendix-A-2">The context-based event organization was inspired by distributed tracing systems used in microservices architectures and by the contextual logging proposal (KEP-3077) for Kubernetes.<a href="#appendix-A-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="examples">
+<section id="appendix-B">
+      <h2 id="name-examples">
+<a href="#name-examples" class="section-name selfRef">Examples</a>
+      </h2>
+<div id="complete-tls-13-handshake-example">
+<section id="appendix-B.1">
+        <h3 id="name-complete-tls-13-handshake-e">
+<a href="#name-complete-tls-13-handshake-e" class="section-name selfRef">Complete TLS 1.3 Handshake Example</a>
+        </h3>
+<p id="appendix-B.1-1">The following shows a complete event log for a TLS 1.3 client handshake with ECDHE key exchange and RSA-PSS signature verification:<a href="#appendix-B.1-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="appendix-B.1-2">
+<pre>
+[
+    {
+        "context": "a1b2c3d4e5f6...",
+        "start": 1234567890,
+        "end": 1234567895,
+        "events": [
+            {
+                "type": "new_context",
+                "parent": "000000000000..."
+            },
+            {
+                "type": "string_data",
+                "name": "tls::handshake_client"
+            },
+            {
+                "type": "word_data",
+                "tls::protocol_version": 0x0304
+            },
+            {
+                "type": "word_data",
+                "tls::ciphersuite": 0x1301
+            }
+        ]
+    },
+    {
+        "context": "f6e5d4c3b2a1...",
+        "start": 1234567891,
+        "end": 1234567893,
+        "events": [
+            {
+                "type": "new_context",
+                "parent": "a1b2c3d4e5f6..."
+            },
+            {
+                "type": "string_data",
+                "name": "tls::key_exchange"
+            },
+            {
+                "type": "word_data",
+                "tls::group": 0x001d
+            }
+        ]
+    },
+    {
+        "context": "123456789abc...",
+        "start": 1234567892,
+        "end": 1234567894,
+        "events": [
+            {
+                "type": "new_context",
+                "parent": "a1b2c3d4e5f6..."
+            },
+            {
+                "type": "string_data",
+                "name": "tls::certificate_verify"
+            },
+            {
+                "type": "word_data",
+                "tls::signature_algorithm": 0x0804
+            },
+            {
+                "type": "word_data",
+                "pk::bits": 3072
+            }
+        ]
+    }
+]
+</pre><a href="#appendix-B.1-2" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-C">
+      <h2 id="name-authors-address">
+<a href="#name-authors-address" class="section-name selfRef">Author's Address</a>
+      </h2>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Daiki Ueno</span></div>
+<div dir="auto" class="left"><span class="org">Red Hat, Inc.</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:dueno@redhat.com" class="email">dueno@redhat.com</a>
+</div>
+</address>
+</section>
+</div>
+<script>const toc = document.getElementById("toc");
+toc.querySelector("h2").addEventListener("click", e => {
+  toc.classList.toggle("active");
+});
+toc.querySelector("nav").addEventListener("click", e => {
+  toc.classList.remove("active");
+});
+</script>
+</body>
+</html>
