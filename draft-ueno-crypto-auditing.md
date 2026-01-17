@@ -165,9 +165,33 @@ CRYPTO_AUDITING_WORD_DATA(context, "tls::protocol_version", 0x0304);
 The four probe types have the following semantics:
 
 - `new_context(context, parent)`: Introduce a new context under a given parent. If `parent` is NULL or 0, the context has no parent.
-- `word_data(context, key, value)`: Emit an event with a machine-word-sized value
+- `word_data(context, key, value)`: Emit an event with a machine-word-sized integral value
 - `string_data(context, key, value)`: Emit an event with a NUL-terminated string value
 - `blob_data(context, key, value, value_size)`: Emit an event with a binary blob of specified size
+
+For further optimization purposes, there are also the following couple
+of generic probe types that can aggregate multiple events at once as
+an array:
+
+- `data(context, array_ptr, array_size)`
+- `new_context_with_data(context, parent, array_ptr, array_size)`
+
+The element of array is in the following structure in C:
+
+~~~c
+struct crypto_auditing_data {
+	char *key_ptr;
+	void *value_ptr;
+	unsigned long value_size;
+};
+~~~
+
+The value type of the element is indicated through the `value_size`
+field. If it is `(unsigned long)-2`, it is a word value. If it is
+`(unsigned long)-1`, it is a string value. Otherwise, it is a blob of
+size indicated with the field.
+
+The maximum number of data elements is 16.
 
 ## Design Rationale
 
