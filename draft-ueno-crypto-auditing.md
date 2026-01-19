@@ -69,12 +69,7 @@ As security research advances, cryptographic algorithms and protocols that were 
 
 While operating systems may provide system-wide mechanisms to enforce cryptographic policies (such as {{CRYPTO-POLICIES}}), administrators may relax these policies to support legacy applications. Additionally, applications can bypass system policies or use cryptography in ways not covered by policy enforcement mechanisms.
 
-This document specifies:
-
-1. A USDT-based probe interface for instrumenting cryptographic libraries
-2. An event logging format based on hierarchical contexts
-3. A CBOR encoding for efficient storage and transmission
-4. A registry of event keys for common cryptographic operations
+This document specifies an event logging format based on hierarchical contexts, as well as profiles for common cryptographic operations and protocols. While the logging format is designed to be agnostic to the file formats, this document assumes the CBOR {{RFC7049}} (Concise Binary Object Representation) encoding for efficient storage and transmission. Similarly, for instrumenting cryptographic libraries, this document assumes the usage of eBPF based probes interface, based on USDT (user statically defined tracepoints).
 
 The design goals include:
 
@@ -106,7 +101,7 @@ Organizations may be required by law or standards to ensure their systems use on
 
 # USDT Probe Interface
 
-Programs being traced (typically cryptographic libraries) define USDT (user statically defined tracepoints) probes to notify monitoring agents of cryptographic events. This section specifies the probe interface.
+Programs being traced (typically cryptographic libraries) define USDT probes to notify monitoring agents of cryptographic events. This section specifies the probe interface.
 
 ## Probe Definitions
 
@@ -331,7 +326,7 @@ This compression preserves the same semantics as the uncompressed form.
 
 ## CBOR Encoding
 
-The RECOMMENDED storage format uses CBOR {{RFC7049}} (Concise Binary Object Representation). The following CDDL {{RFC8610}} (Concise Data Definition Language) specification defines the format:
+The RECOMMENDED storage format uses CBOR. The following CDDL {{RFC8610}} (Concise Data Definition Language) specification defines the format:
 
 ~~~cddl
 LogEntry = EventGroup
